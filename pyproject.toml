@@ -40,8 +40,6 @@ ruff = { cmd = "ruff check src", help = "Linting using Ruff" }
 mypy = { cmd = "mypy src --exclude neorezo/biz", help = "Type checking using mypy" }
 pytest = { cmd = "pytest .", help = "Unit testing using pytest" }
 tests.composite = ["ruff", "mypy", "pytest"]
-pre_build = { cmd = "pdm run tests" }
-pre_deploy = { cmd = "pdm build" }
 
 [tool.pytest.ini_options]
 pythonpath = "src"

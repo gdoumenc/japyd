@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typing as t
 
 import pytest
@@ -67,7 +65,6 @@ def client():
         yield client
 
 
-@pytest.mark.skip
 class TestFilter:
 
     def test_parse(self, client):

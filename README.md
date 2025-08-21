@@ -5,7 +5,7 @@
 Automate JSON:API relationships with Pydantic. No manual mapping, just clean code.
 
 [![Tests](https://github.com/gdoumenc/japyd/actions/workflows/tests.yml/badge.svg)](https://github.com/gdoumenc/japyd/actions/workflows/tests.yml)
-[![Codecov](https://codecov.io/gh/gdoumenc/japyd/branch/master/graph/badge.svg)](https://codecov.io/gh/gdoumenc/japyd)
+[![Codecov](https://codecov.io/gh/gdoumenc/japyd/branch/main/graph/badge.svg)](https://codecov.io/gh/gdoumenc/japyd)
 [![PyPI](https://img.shields.io/pypi/v/japyd)](https://pypi.org/project/japyd/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/gdoumenc/japyd/refs/heads/master/pyproject.toml)](https://pypi.org/project/japyd/)

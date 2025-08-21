@@ -10,9 +10,9 @@ readme = "README.md"
 license = { text = "MIT" }
 
 dependencies = [
-    "flask>=3.1.1",
+    "flask",
     "flask-pydantic>=0.13.1",
-    "twine>=6.1.0",
+    "twine",
 ]
 
 [project.optional-dependencies]

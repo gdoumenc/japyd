@@ -1,85 +1,56 @@
-from japyd.jsonapi import Relationship
-from japyd.jsonapi import Resource
-from japyd.jsonapi import ResourceIdentifier
-from japyd.jsonapi import TopLevel
-from japyd.utils import extract_from_resource_identifier
-from japyd.utils import extract_relationship
+import typing as t
+from typing import Annotated
+
+import pytest
+from flask import Flask
+from flask_pydantic import validate
+from pydantic import field_serializer
+
+from japyd import JsonApiBaseModel
+from japyd import JsonApiQueryModel
+from japyd import TopLevel
 
 
-class TestRelationship:
+class Product(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "product"
 
-    def test_article(self, article):
-        toplevel = TopLevel(**article)
-        author = extract_relationship(toplevel, "author")
-        assert author.attributes['firstName'] == 'Dan'
-        country = extract_relationship(toplevel, "author.country")
-        assert country.attributes['name'] == 'France'
+    id: str
+    price: float
 
-        author = extract_relationship(toplevel, toplevel.data.relationships['author'])
-        assert author.attributes['firstName'] == 'Dan'
-        country = extract_relationship(toplevel, author.relationships['country'])
-        assert country.attributes['name'] == 'France'
 
-        resources = extract_relationship(toplevel, 'comments')
-        assert len(resources) == 2
-        authors = extract_relationship(toplevel, 'comments.author')
-        assert len(authors) == 2
-        peoples = extract_relationship(toplevel, 'comments.author.country')
-        assert len(peoples) == 1
+class Order(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "order"
 
-    def test_attributes(self, article):
-        toplevel = TopLevel(**article)
-        author = extract_relationship(toplevel, "author")
-        assert author.attributes['firstName'] == 'Dan'
+    id: str
+    customer_id: str
+    items: Annotated[list[Product], 'as_attribute']  # This attribute will be an 'attribute' in JSON:API
+    status: str  # This attribute will be classical 'attribute'
 
-    def test_relationship(self, article):
-        toplevel = TopLevel(**article)
-        assert toplevel.errors is None
-        attrs = toplevel.data.attributes
-        assert attrs['title'] == 'Rails is Omakase'
+    @field_serializer('items')
+    def serialize_items(self, items):
+        return [item.price for item in items]
 
-        author_rel = toplevel.data.relationships['author']
-        author = extract_relationship(toplevel, author_rel)
-        assert author.attributes['firstName'] == 'Dan'
 
-        comments_rel: Relationship = toplevel.data.relationships['comments']
-        assert len(comments_rel.data) == 2
+app = Flask(__name__)
 
-        resources = extract_relationship(toplevel, comments_rel)
-        assert len(resources) == 2
-        resource: Resource = [r for r in resources if r.id == '12'][0]
-        assert resource.id == '12'
-        assert resource.type == 'comments'
-        assert resource.attributes["body"] == "I like XML better"
 
-        comment: ResourceIdentifier = [c for c in comments_rel.data if c.id == '12'][0]
-        assert comment.id == '12'
-        assert comment.type == 'comments'
-        resource = extract_from_resource_identifier(toplevel, comment)
-        assert resource.attributes["body"] == "I like XML better"
+@app.route("/orders/<order_id>")
+@validate(exclude_none=True)
+def get_order(order_id, query: JsonApiQueryModel):
+    order = Order(id=order_id, customer_id="123", items=[Product(id="1", price=100.0)], status="open")
+    return query.one_or_none(order)
 
-        author = extract_relationship(toplevel, resource.relationships['author'])
-        assert author.attributes['firstName'] == 'Dan'
 
-    def test_relationship_from_path(self, article):
-        toplevel = TopLevel(**article)
-        assert toplevel.errors is None
-        attrs = toplevel.data.attributes
-        assert attrs['title'] == 'Rails is Omakase'
+@pytest.fixture()
+def client():
+    return app.test_client()
 
-        author = extract_relationship(toplevel, 'author')
-        assert author.attributes['firstName'] == 'Dan'
-        country = extract_relationship(toplevel, 'author.country')
-        assert country.attributes['name'] == 'France'
 
-        resources = extract_relationship(toplevel, 'comments')
-        assert len(resources) == 2
-        resource: Resource = [r for r in resources if r.id == '12'][0]
-        assert resource.id == '12'
-        assert resource.type == 'comments'
-        assert resource.attributes["body"] == "I like XML better"
-
-    def test_articles(self, articles):
-        toplevel = TopLevel(**articles)
-        authors = extract_relationship(toplevel, "author")
-        assert len(authors) == 2
+def test_bypass(client):
+    response = client.get("/orders/3?include=items")
+    top = TopLevel.model_validate(response.json)
+    assert top.data.id == "3"
+    assert top.data.attributes['status'] == 'open'
+    assert 'items' not in top.data.relationships
+    assert 'items' in top.data.attributes
+    assert 100.0 in top.data.attributes['items']

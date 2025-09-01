@@ -60,8 +60,8 @@ class JsonApiApp:
     """Flask's extension implementing JSON:API specification.
     """
 
-    def __init__(self, app: Flask = None):
-        self.app = None
+    def __init__(self, app: Flask | None = None):
+        self.app: Flask | None = None
 
         if app:
             self.init_app(app)
@@ -74,11 +74,17 @@ class JsonApiApp:
 
         def _handle_http_exception(e: HTTPException):
             err = handle_http_exception(e)
-            errors = [Error(id=e.name, title=e.name, detail=e.description, status=str(err.code))]  # noqa
-            return (TopLevel(errors=errors).model_dump_json(exclude_none=True), err.code,
-                    {'Content-Type': 'application/vnd.api+json'})
+            if isinstance(err, HTTPException):
+                errors = [
+                    Error(id=e.name, title=e.name, detail=e.description, status=str(err.code))
+                    # type: ignore[union-attr]
+                ]
+                return (TopLevel(errors=errors).model_dump_json(exclude_none=True),  # type: ignore[union-attr]
+                        err.code,
+                        {'Content-Type': 'application/vnd.api+json'})
+            return err
 
-        app.handle_http_exception = _handle_http_exception
+        app.handle_http_exception = _handle_http_exception  # type: ignore[method-assign]
 
     def _change_content_type(self, response):
         if 'application/vnd.api+json' not in request.headers.getlist('accept'):

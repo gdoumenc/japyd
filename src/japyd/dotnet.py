@@ -275,7 +275,7 @@ class JsonApiQueryModel(BaseModel):
 
 
 class JsonApiBodyModel(BaseModel):
-    data: JsonApiBaseModel | list[JsonApiBaseModel] | None = None
+    data: Resource | list[Resource] | None = None
     included: list[Resource] | None = Field(default_factory=list)
     debug: bool = False
 
@@ -283,5 +283,11 @@ class JsonApiBodyModel(BaseModel):
         frozen = True
 
     @property
+    def attributes(self):
+        return self.data.attributes
+
+    @property
     def values(self):
+        import warnings
+        warnings.warn("Deprecated. Use 'attributes' instead.")
         return self.data

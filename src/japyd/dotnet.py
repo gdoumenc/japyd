@@ -163,7 +163,7 @@ class JsonApiQueryModel(BaseModel):
 
         return self.one(value)
 
-    def paginate(self, values: list[JsonApiBaseModel], full_list: bool = True,
+    def paginate(self, values: list[Resource | JsonApiBaseModel], *, full_list: bool = True,
                  total: int | None = None) -> TopLevel:
         """Returns multi JSON:API toplevel's data from a value iterable.
 
@@ -193,7 +193,9 @@ class JsonApiQueryModel(BaseModel):
                 "has_prev": pagination.number > 1,
             }
         }
-        resources: list[Resource] = [v.as_resource(included, self) for v in values]
+        resources: list[Resource] = [
+            v if isinstance(v, Resource) else v.as_resource(included, self) for v in values
+        ]
         return TopLevel.model_validate({'data': resources, 'included': included, 'meta': meta})
 
     @staticmethod

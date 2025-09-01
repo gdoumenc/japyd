@@ -1,4 +1,5 @@
 from japyd.dotnet import JsonApiBaseModel
+from japyd.dotnet import JsonApiBodyModel
 from japyd.dotnet import JsonApiQueryModel
 from japyd.jsonapi import Error
 from japyd.jsonapi import Link
@@ -9,5 +10,5 @@ from japyd.jsonapi import TopLevel
 
 __all__ = [
     "TopLevel", "Resource", "ResourceIdentifier", "Relationship", "Link", "Error",
-    "JsonApiBaseModel", "JsonApiQueryModel"
+    "JsonApiBaseModel", "JsonApiQueryModel", "JsonApiBodyModel"
 ]

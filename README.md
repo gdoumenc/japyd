@@ -29,6 +29,8 @@ The principle is as follows:
 
 ## Usage
 
+### Serialization
+
 Define your data models in Pydantic, let *japyd* automatically handle serialization—including relationships and included
 resources—and expose a standard-compliant JSON:API with Flask in just a few lines of code.
 
@@ -82,8 +84,12 @@ def test_request(client):
     assert top.data.attributes['status'] == 'open'
     assert len(top.data.relationships['items'].data) == 1
     assert top.included[0].type == "product"
-
 ```
+
+### Filtering
+
+The complete filtering syntax of [JsonApiDotNetCore](https://www.jsonapi.net/) is supported
+
 
 ## References
 

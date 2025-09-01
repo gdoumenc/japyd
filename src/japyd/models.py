@@ -56,6 +56,11 @@ class JsonApiBaseModel(BaseModel):
             value = getattr(self, key)
             prefixed_key = f"{key_prefix}.{key}" if key_prefix else key
             if issubtype(f.annotation, JsonApiBaseModel) and value is not None:  # type: ignore[arg-type]
+
+                # Bypass if annotated as a dict
+                if 'as_attribute' in f.metadata:
+                    continue
+
                 if isinstance(value, list):
                     data = [_add_in_included(v, prefixed_key) for v in value]
                 else:

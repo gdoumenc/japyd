@@ -58,8 +58,8 @@ class Order(JsonApiBaseModel):
 
     id: str
     customer_id: str
-    items: list[Product]  # This attribute will be 'relationship' in JSON:API
-    status: str  # This attribute will be classical 'attribute'
+    items: list[Product]  # This field will be 'relationship' in JSON:API
+    status: str  # This field will be classical 'attribute'
 
 
 app = Flask(__name__)
@@ -84,6 +84,12 @@ def test_request(client):
     assert top.data.attributes['status'] == 'open'
     assert len(top.data.relationships['items'].data) == 1
     assert top.included[0].type == "product"
+```
+
+You can bypass this behavior by annotationg the field as follow:
+
+```python
+    items: Annotated[list[Product], 'as_attribute']  # This field will be now an 'attribute' in JSON:API
 ```
 
 ### Filtering

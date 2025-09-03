@@ -88,11 +88,12 @@ def get_relation_identifiers(toplevel, data, relationship: str) -> ResourceIdent
         return get_relation_identifiers(toplevel, res, other)
 
 
-def flatten_resource(res: Resource | dict) -> dict:
-    """Returns the resource attributes with the key 'id' added."""
+def flatten_resource(res: Resource | dict, complement: dict | None = None) -> dict:
+    """Returns the resource attributes with the 'id' added."""
+    complement = complement or {}
     if isinstance(res, Resource):
-        return {'id': res.id, **res.attributes}
-    return {'id': res['id'], **res['attributes']}
+        return {'id': res.id, **res.attributes, **complement}
+    return {'id': res['id'], **res['attributes'], **complement}
 
 
 def to_bool(val: t.Any) -> bool:

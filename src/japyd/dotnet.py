@@ -8,6 +8,7 @@ from http import HTTPStatus
 from flask import Response
 from flask import request
 from pydantic import BaseModel
+from pydantic import ConfigDict
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
@@ -70,6 +71,8 @@ class JsonApiPagination(BaseModel):
 
 
 class JsonApiQueryFilter(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     oper: Oper
     subfilter: tuple[JsonApiQueryFilter, JsonApiQueryFilter] | JsonApiQueryFilter | None = None
     attr: str | None = None
@@ -102,6 +105,8 @@ class JsonApiQueryModel(BaseModel):
     As request's query defines the fields to be returned, the filters and other parameters
     use this query to paginate the result or the not_found method if no result.
     """
+    model_config = ConfigDict(frozen = True, str_strip_whitespace=True)
+
     fields: dict[str, list[str]] | None = Field(default_factory=dict)
     filter: t.Union[list[str], None] = None
     include: t.Union[set[str], None] = Field(default_factory=set)
@@ -275,12 +280,11 @@ class JsonApiQueryModel(BaseModel):
 
 
 class JsonApiBodyModel(BaseModel):
+    model_config = ConfigDict(frozen = True, str_strip_whitespace=True)
+
     data: Resource | list[Resource] | None = None
     included: list[Resource] | None = Field(default_factory=list)
     debug: bool = False
-
-    class Config:
-        frozen = True
 
     @property
     def attributes(self):

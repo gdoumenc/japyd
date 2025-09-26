@@ -19,9 +19,12 @@ jobs:
       - uses: pdm-project/setup-pdm@v4
         with:
           python-version: 3.12
+            
+      - name: Fetch all history for all tags and branches
+        run: git fetch main main --unshallow
 
-      - name: Trace referecne
-        run: echo ${GITHUB_REF}
+      - name: Trace last version
+        run: echo $(git describe --tags --abbrev=0)
 
       - name: Check version change
         id: version_check

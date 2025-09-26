@@ -38,7 +38,7 @@ class Oper(StrEnum):
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
 
 NUMERIC_REGEXP = r"[-+]?[0-9]*.?[0-9]+([eE][-+]?[0-9]+)?"
-IDENTIFIER_REGEXP = r"([A-Za-z_][A-Za-z0-9_]*)"
+IDENTIFIER_REGEXP = r"([A-Za-z_][A-Za-z0-9_\.]*)"
 QUOTED_REGEXP = r"('[^']|'')*'"
 VALUE_REGEXP = rf"(?P<value>'([^']|'')*')|(?P<numeric>{NUMERIC_REGEXP})|(?P<other_attr>{IDENTIFIER_REGEXP})"
 OPER_REGEXP = (

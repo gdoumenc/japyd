@@ -21,9 +21,6 @@ jobs:
         with:
           python-version: 3.12
             
-      - name: Fetch all history for all tags and branches
-        run: git fetch main main --unshallow
-
       - name: Trace last version
         run: echo $(git describe --tags --abbrev=0)
 

@@ -68,7 +68,7 @@ def client():
 class TestFilter:
 
     def test_parse(self, client):
-        client.get('/', query_string={"filter": "equals(name,'Brian O''Connor')"})
+        client.get("/", query_string={"filter": "equals(name,'Brian O''Connor')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "name"
@@ -76,7 +76,7 @@ class TestFilter:
         assert filter.value == "Brian O'Connor"
         assert filter.other_attr is None
 
-        client.get('/', query_string={"filter": "equals(attr1,null)"})
+        client.get("/", query_string={"filter": "equals(attr1,null)"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "attr1"
@@ -84,7 +84,7 @@ class TestFilter:
         assert filter.value is None
         assert filter.other_attr is None
 
-        client.get('/', query_string={"filter": "lessThan(price,'10')"})
+        client.get("/", query_string={"filter": "lessThan(price,'10')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "price"
@@ -92,16 +92,16 @@ class TestFilter:
         assert filter.value == "10"
         assert filter.other_attr is None
 
-        client.get('/', query_string={"filter": "lessOrEqual(attr1,attr2)"})
+        client.get("/", query_string={"filter": "lessOrEqual(attr1,attr2)"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "attr1"
         assert filter.oper == Oper.LESS_OR_EQUAL
         assert filter.value is None
-        assert filter.other_attr == 'attr2'
+        assert filter.other_attr == "attr2"
 
     def test_parse_spaces(self, client):
-        client.get('/', query_string={"filter": " equals (name,'Brian O''Connor')"})
+        client.get("/", query_string={"filter": " equals (name,'Brian O''Connor')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "name"
@@ -109,7 +109,7 @@ class TestFilter:
         assert filter.value == "Brian O'Connor"
         assert filter.other_attr is None
 
-        client.get('/', query_string={"filter": "equals(attr1,null) "})
+        client.get("/", query_string={"filter": "equals(attr1,null) "})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "attr1"
@@ -117,7 +117,7 @@ class TestFilter:
         assert filter.value is None
         assert filter.other_attr is None
 
-        client.get('/', query_string={"filter": "lessThan( price , '10' )"})
+        client.get("/", query_string={"filter": "lessThan( price , '10' )"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.attr == "price"
@@ -126,29 +126,29 @@ class TestFilter:
         assert filter.other_attr is None
 
     def test_parse_values(self, client):
-        client.get('/', query_string={"filter": "equals(attr1,null)"})
+        client.get("/", query_string={"filter": "equals(attr1,null)"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.value is None
 
-        client.get('/', query_string={"filter": "equals(attr1,'null')"})
+        client.get("/", query_string={"filter": "equals(attr1,'null')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
-        assert filter.value == 'null'
+        assert filter.value == "null"
 
-        client.get('/', query_string={"filter": "equals(attr1,0)"})
+        client.get("/", query_string={"filter": "equals(attr1,0)"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.value == 0
 
-        client.get('/', query_string={"filter": "equals(attr1,0.0)"})
+        client.get("/", query_string={"filter": "equals(attr1,0.0)"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert isinstance(filter.value, float)
         assert filter.value == 0.0
 
     def test_parse_not(self, client):
-        client.get('/', query_string={"filter": "not(equals(attr1,null) )"})
+        client.get("/", query_string={"filter": "not(equals(attr1,null) )"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.oper == Oper.NOT
@@ -157,20 +157,20 @@ class TestFilter:
         assert filter.subfilter.value is None
 
     def test_parse_any(self, client):
-        client.get('/', query_string={"filter": "any(attr1, 'test')"})
+        client.get("/", query_string={"filter": "any(attr1, 'test')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         assert filter.oper == Oper.ANY
         assert filter.attr == "attr1"
-        assert filter.value == ['test']
+        assert filter.value == ["test"]
 
-        client.get('/', query_string={"filter": "any(attr1, 'test', 'other')"})
+        client.get("/", query_string={"filter": "any(attr1, 'test', 'other')"})
         assert len(request.query_params.filters) == 1
         filter = next(iter(request.query_params.filters))
         ""
         assert filter.oper == Oper.ANY
         assert filter.attr == "attr1"
-        assert filter.value == ['test', 'other']
+        assert filter.value == ["test", "other"]
 
     # def test_parse_or(self):
     #     query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
@@ -178,39 +178,59 @@ class TestFilter:
     #     assert len(query.filters) == 1
     #     filter = next(iter(query.filters))
 
+    @pytest.mark.wip
+    def test_parse_filter_array(self, client):
+        client.get("/", query_string={"filter[0]": "equals(attr1,0)", "filter[1]": "any(attr2, 'test', 'other')"})
+        filters = list(request.query_params.filters)
+        assert len(filters) == 2
+        assert filters[0].attr == "attr1"
+        assert filters[0].oper == Oper.EQUALS
+        assert filters[1].attr == "attr2"
+        assert filters[1].oper == Oper.ANY
+
 
 @pytest.mark.skip
 class TestReturnedValue:
 
     def test_match(self, client):
-        res = client.get('/example', query_string={"filter": "equals(name,'Brian O''Connor')"})
+        res = client.get("/example", query_string={"filter": "equals(name,'Brian O''Connor')"})
         assert res.status_code == 200
         example = ExampleBaseModel(**res.json)
         assert example.name == "Brian O'Connor"
         assert example.notice == 10
 
-        res = client.get('/example', query_string={"filter": "not(equals(name,'Brian O''Connor'))"})
+        res = client.get("/example", query_string={"filter": "not(equals(name,'Brian O''Connor'))"})
         assert res.status_code == 204
 
-        res = client.post('/example', query_string={"filter": "lessThan(notice, 5)"}, json={},
-                          headers={"Content-Type": "application/vnd.api+json"})
+        res = client.post(
+            "/example",
+            query_string={"filter": "lessThan(notice, 5)"},
+            json={},
+            headers={"Content-Type": "application/vnd.api+json"},
+        )
         assert res.status_code == 204
-        res = client.post('/example', query_string={"filter": "greaterThan(notice, 5)"}, json={},
-                          headers={"Content-Type": "application/vnd.api+json"})
+        res = client.post(
+            "/example",
+            query_string={"filter": "greaterThan(notice, 5)"},
+            json={},
+            headers={"Content-Type": "application/vnd.api+json"},
+        )
         assert res.status_code == 200
 
-        res = client.post('/example',
-                          json={"data": {"notice": 15}},
-                          headers={"Content-Type": "application/vnd.api+json"})
+        res = client.post(
+            "/example", json={"data": {"notice": 15}}, headers={"Content-Type": "application/vnd.api+json"}
+        )
         assert res.status_code == 200
-        example = ExampleBaseModel(**res.json['attributes'])
+        example = ExampleBaseModel(**res.json["attributes"])
         assert example.notice == 15
-        res = client.post('/example',
-                          json={"data": {"notice": 15}},
-                          query_string={"filter": "greaterOrEqual(notice, 15)"},
-                          headers={"Content-Type": "application/vnd.api+json"})
+        res = client.post(
+            "/example",
+            json={"data": {"notice": 15}},
+            query_string={"filter": "greaterOrEqual(notice, 15)"},
+            headers={"Content-Type": "application/vnd.api+json"},
+        )
         assert res.status_code == 200
-        example = ExampleBaseModel(**res.json['attributes'])
+        example = ExampleBaseModel(**res.json["attributes"])
         assert example.notice == 15
 
     def test_fields(self, client):
@@ -225,12 +245,14 @@ class TestReturnedValue:
         # assert 'notice' not in res.json['attributes']
         # assert 'other' not in res.json['attributes']
 
-        res = client.post('/example',
-                          json={"data": {"notice": 15, "other": {"attr1": "test"}}},
-                          query_string={"filter": "greaterOrEqual(notice, 15)"},
-                          headers={"Content-Type": "application/vnd.api+json"})
+        res = client.post(
+            "/example",
+            json={"data": {"notice": 15, "other": {"attr1": "test"}}},
+            query_string={"filter": "greaterOrEqual(notice, 15)"},
+            headers={"Content-Type": "application/vnd.api+json"},
+        )
         assert res.status_code == 200
-        example = ExampleBaseModel(**res.json['attributes'])
+        example = ExampleBaseModel(**res.json["attributes"])
         assert example.notice == 15
-        assert 'other' not in res.json['attributes']
-        assert 'other' in res.json['relationships']
+        assert "other" not in res.json["attributes"]
+        assert "other" in res.json["relationships"]

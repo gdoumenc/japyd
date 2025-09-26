@@ -118,7 +118,7 @@ class JsonApiQueryModel(BaseModel):
     include: t.Union[set[str], None] = Field(default_factory=set)
     sort: t.Union[str, None] = None
 
-    @computed_field
+    @computed_field  # type: ignore[misc]
     @cached_property
     def filters(self) -> t.Sequence[JsonApiQueryFilter]:
         """Returns an iterator over the filters from the query."""

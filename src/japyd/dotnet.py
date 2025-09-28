@@ -1,24 +1,17 @@
 from __future__ import annotations
 
-from functools import cached_property
 import re
 import typing as t
 from enum import StrEnum
+from functools import cached_property
 from http import HTTPStatus
 
-from flask import Response
-from flask import request
-from pydantic import BaseModel, computed_field
-from pydantic import ConfigDict
-from pydantic import Field
-from pydantic import field_validator
-from pydantic import model_validator
-from werkzeug.exceptions import NotFound
-from werkzeug.exceptions import UnprocessableEntity
+from flask import Response, request
+from pydantic import (BaseModel, ConfigDict, Field, computed_field,
+                      field_validator, model_validator)
+from werkzeug.exceptions import NotFound, UnprocessableEntity
 
-from japyd.jsonapi import Error
-from japyd.jsonapi import Resource
-from japyd.jsonapi import TopLevel
+from japyd.jsonapi import Error, Resource, TopLevel
 from japyd.models import JsonApiBaseModel
 from japyd.utils import to_string_or_numeric
 
@@ -220,26 +213,28 @@ class JsonApiQueryModel(BaseModel):
     @staticmethod
     def not_found(detail: str | None = None) -> tuple[TopLevel, int]:
         error = NotFound(description=detail)
-        return JsonApiQueryModel.error(error.code, error.name, error.description)
+        return JsonApiQueryModel.error(error.code, error.name, error.get_description()) # type: ignore
 
     @model_validator(mode="before")
     def parse_filter_fields(cls, data: dict) -> dict:
         filter = []
+        fields = {}
         for arg, value in data.items():
-            if arg.startswith("fields["):
+            if arg.startswith("filter["):
+                filter.append(value)
+            elif arg.startswith("fields["):
                 groups = FIELDS_REGEXP.match(arg)
                 if groups:
-                    if "fields" not in data:
-                        data["fields"] = {}
-                    data["fields"][groups[1]] = set(value.split(","))
+                    fields[groups[1]] = set(value.split(","))
                 else:
                     msg = f"Wrong fields parameters: {arg}"
                     raise UnprocessableEntity(msg)
-            if arg.startswith("filter["):
-                filter.append(value)
 
-        if len(filter) > 0:     
+        if filter:
             data["filter"] = filter
+        if fields:
+            data["fields"] = fields
+
         return data
 
     @field_validator("include", mode="before")
@@ -295,7 +290,9 @@ class JsonApiBodyModel(BaseModel):
 
     @property
     def attributes(self):
-        return self.data.attributes
+        if isinstance(self.data, list):
+            return [d.attributes for d in self.data]
+        return self.data.attributes if self.data else None
 
     @property
     def values(self):

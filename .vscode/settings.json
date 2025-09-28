@@ -1,15 +1,16 @@
 {
-   "files.exclude": {
-    "**/.git": true,
-    "**/.svn": true,
-    "**/.hg": true,
-    "**/CVS": true,
-    "**/__pycache__": true,
-    "**/.mypy_cache": true,
-    "**/.ruff_cache": true,
-    "**/.pytest*": true,
-    "**/.DS_Store": true,
-    "**/.pdm*": true,
-  },   "python.testing.unittestEnabled": false,
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/__pycache__": true,
+        "**/.pytest*": true,
+        "**/.mypy*": true,
+        "**/.ruff*": true,
+        "**/.DS_Store": true,
+        "**/.pdm*": true,
+    },
+    "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true
 }

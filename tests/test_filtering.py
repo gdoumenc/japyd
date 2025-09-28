@@ -147,6 +147,12 @@ class TestFilter:
         assert isinstance(filter.value, float)
         assert filter.value == 0.0
 
+        client.get("/", query_string={"filter": "equals(attr1.attr2,0.0)"})
+        assert len(request.query_params.filters) == 1
+        filter = next(iter(request.query_params.filters))
+        assert isinstance(filter.value, float)
+        assert filter.value == 0.0
+
     def test_parse_not(self, client):
         client.get("/", query_string={"filter": "not(equals(attr1,null) )"})
         assert len(request.query_params.filters) == 1

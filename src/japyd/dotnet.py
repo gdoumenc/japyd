@@ -38,8 +38,8 @@ class Oper(StrEnum):
     STARTS_WITH = "startsWith"
     ENDS_WITH = "endsWith"
 
-    ANY = "any"
-    HAS = "has"
+    ANY = "any"  # Equals one value from set
+    HAS = "has"  # Collection contains items
 
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")

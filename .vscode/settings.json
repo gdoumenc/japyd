@@ -1,6 +1,7 @@
 {
     "files.exclude": {
         "**/.git": true,
+        "**.github": true,
         "**/.svn": true,
         "**/.hg": true,
         "**/CVS": true,
@@ -10,6 +11,7 @@
         "**/.ruff*": true,
         "**/.DS_Store": true,
         "**/.pdm*": true,
+        "dist": true,
     },
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true

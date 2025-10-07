@@ -1,8 +1,5 @@
-from flask import Flask
-from flask import request
-from pydantic import AnyUrl
-from pydantic import BaseModel
-from pydantic import Field
+from flask import Flask, request
+from pydantic import AnyUrl, BaseModel, Field
 from werkzeug.exceptions import HTTPException
 
 
@@ -47,8 +44,7 @@ class Resource(BaseModel):
     meta: dict | None = None
 
 
-class TopLevel(BaseModel):
-    data: Resource | list[Resource] | None = None
+class __TopLevel(BaseModel):
     errors: list[Error] | None = None
     meta: dict | None = None
     jsonapi: JsonApi | None = None
@@ -56,9 +52,20 @@ class TopLevel(BaseModel):
     included: list[Resource] | None = None
 
 
+class TopLevel(__TopLevel):
+    data: Resource | list[Resource] | None = None
+
+
+class TopLevelSingle(__TopLevel):
+    data: Resource
+
+
+class TopLevelArray(__TopLevel):
+    data: list[Resource]
+
+
 class JsonApiApp:
-    """Flask's extension implementing JSON:API specification.
-    """
+    """Flask's extension implementing JSON:API specification."""
 
     def __init__(self, app: Flask | None = None):
         self.app: Flask | None = None
@@ -79,16 +86,18 @@ class JsonApiApp:
                     Error(id=e.name, title=e.name, detail=e.description, status=str(err.code))
                     # type: ignore[union-attr]
                 ]
-                return (TopLevel(errors=errors).model_dump_json(exclude_none=True),  # type: ignore[union-attr]
-                        err.code,
-                        {'Content-Type': 'application/vnd.api+json'})
+                return (
+                    TopLevel(errors=errors).model_dump_json(exclude_none=True),  # type: ignore[union-attr]
+                    err.code,
+                    {"Content-Type": "application/vnd.api+json"},
+                )
             return err
 
         app.handle_http_exception = _handle_http_exception  # type: ignore[method-assign]
 
     def _change_content_type(self, response):
-        if 'application/vnd.api+json' not in request.headers.getlist('accept'):
+        if "application/vnd.api+json" not in request.headers.getlist("accept"):
             return response
 
-        response.content_type = 'application/vnd.api+json'
+        response.content_type = "application/vnd.api+json"
         return response

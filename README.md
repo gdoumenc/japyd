@@ -11,6 +11,7 @@ Automate JSON:API relationships with Pydantic. No manual mapping, just clean cod
 [![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/gdoumenc/japyd/refs/heads/master/pyproject.toml)](https://pypi.org/project/japyd/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/gdoumenc/japyd/graphs/commit-activity)
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/gdoumenc/japyd)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ## Description
 

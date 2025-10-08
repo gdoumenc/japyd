@@ -6,9 +6,7 @@ from flask import Flask
 from flask_pydantic import validate
 from pydantic import field_serializer
 
-from japyd import JsonApiBaseModel
-from japyd import JsonApiQueryModel
-from japyd import TopLevel
+from japyd import JsonApiBaseModel, JsonApiQueryModel, Resource, TopLevel
 
 
 class Product(JsonApiBaseModel):
@@ -24,10 +22,10 @@ class Order(JsonApiBaseModel):
     id: str
     customer_id: str
     products: list[Product]
-    items: Annotated[list[Product], 'as_attribute']  # This attribute will be an 'attribute' in JSON:API
+    items: Annotated[list[Product], "as_attribute"]  # This attribute will be an 'attribute' in JSON:API
     status: str  # This attribute will be classical 'attribute'
 
-    @field_serializer('items')
+    @field_serializer("items")
     def serialize_items(self, items):
         return [item.price for item in items]
 
@@ -51,11 +49,12 @@ def client():
 def test_include(client):
     response = client.get("/orders/3?include=products, items")
     top = TopLevel.model_validate(response.json)
+    assert isinstance(top.data, Resource)
     assert top.data.id == "3"
-    assert top.data.attributes['status'] == 'open'
-    assert 'products' in top.data.relationships
-    assert 'products' not in top.data.attributes
-    assert 'items' not in top.data.relationships
-    assert 'items' in top.data.attributes
-    assert 100.0 in top.data.attributes['items']
-
+    assert top.data.attributes["status"] == "open"
+    assert top.data.relationships is not None
+    assert "products" in top.data.relationships
+    assert "products" not in top.data.attributes
+    assert "items" not in top.data.relationships
+    assert "items" in top.data.attributes
+    assert 100.0 in top.data.attributes["items"]

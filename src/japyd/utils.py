@@ -1,10 +1,7 @@
 import json
 import typing as t
 
-from japyd.jsonapi import Relationship
-from japyd.jsonapi import Resource
-from japyd.jsonapi import ResourceIdentifier
-from japyd.jsonapi import TopLevel
+from .jsonapi import Relationship, Resource, ResourceIdentifier, TopLevel
 
 
 @t.overload
@@ -14,7 +11,7 @@ def extract_relationship(toplevel: dict | str, relationship: str) -> list[dict] 
 
 @t.overload
 def extract_relationship(toplevel: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource:
-    """Extracts from a TopLevel model."""
+    """Extracts from a TopLevel model as a single resource."""
 
 
 def extract_relationship(toplevel, relationship):
@@ -23,15 +20,16 @@ def extract_relationship(toplevel, relationship):
     :param toplevel: The toplevel jsonapi structure.
     :param relationship: The relationship to extract or the relationship path to extract.
     """
-    if isinstance(toplevel, str):
-        toplevel = json.dumps(toplevel)
-    if isinstance(toplevel, str):
-        toplevel = TopLevel.model_validate(toplevel)
-    if not toplevel.data:
+    tl = toplevel
+    if isinstance(tl, str):
+        tl = json.loads(tl)
+    if isinstance(tl, dict):
+        tl = TopLevel.model_validate(tl)
+    if not tl.data:
         raise AttributeError("Wrong toplevel strucure: no data.")
 
     if isinstance(relationship, str):
-        identifiers = get_relation_identifiers(toplevel, toplevel.data, relationship)
+        identifiers = get_relation_identifiers(tl, tl.data, relationship)
     elif isinstance(relationship, Relationship):
         identifiers = relationship.data
     else:
@@ -41,10 +39,17 @@ def extract_relationship(toplevel, relationship):
         # Set in dictionary to avoid duplicate
         resources = {}
         for ident in identifiers:
-            res = extract_from_resource_identifier(toplevel, ident)
-            resources[f"{res.type}{res.id}"] = res
+            res = extract_from_resource_identifier(tl, ident)
+            if isinstance(toplevel, str) or isinstance(toplevel, dict):
+                resources[f"{res.type}{res.id}"] = res.model_dump()
+            else:
+                resources[f"{res.type}{res.id}"] = res
         return list(resources.values())
-    return extract_from_resource_identifier(toplevel, identifiers)
+
+    res = extract_from_resource_identifier(tl, t.cast(ResourceIdentifier, identifiers))
+    if isinstance(toplevel, str) or isinstance(toplevel, dict):
+        return res.model_dump()
+    return res
 
 
 def extract_from_resource_identifier(toplevel: TopLevel, identifier: ResourceIdentifier) -> Resource:
@@ -70,13 +75,13 @@ def get_relation_identifiers(toplevel, data, relationship: str) -> ResourceIdent
             flat_list.extend(rel) if isinstance(rel, list) else flat_list.append(rel)
         return flat_list
 
-    if '.' not in relationship:
+    if "." not in relationship:
         if relationship not in data.relationships:
             raise AttributeError(f"Cannot extract relationship {relationship} from {toplevel}")
         return data.relationships[relationship].data
 
     # Composed relationships
-    relationship, other, *_ = relationship.split('.', 1)
+    relationship, other, *_ = relationship.split(".", 1)
     res = extract_relationship(toplevel, relationship)
     if isinstance(res, list):
         flat_list = []
@@ -92,17 +97,17 @@ def flatten_resource(res: Resource | dict, *, more: dict | None = None) -> dict:
     """Returns the resource attributes with the 'id' added. Can add more data if needed."""
     more = more or {}
     if isinstance(res, Resource):
-        return {'id': res.id, **res.attributes, **more}
-    return {'id': res['id'], **res['attributes'], **more}
+        return {"id": res.id, **res.attributes, **more}
+    return {"id": res["id"], **res["attributes"], **more}
 
 
 def to_bool(val: t.Any) -> bool:
     if isinstance(val, str):
-        return val.lower() in ['true', '1', 'yes', 'y']
+        return val.lower() in ["true", "1", "yes", "y"]
     return bool(val)
 
 
 def to_string_or_numeric(value: str) -> str | int | float:
     if value.startswith("'"):
         return value.strip("'")
-    return float(value) if '.' in value else int(value)
+    return float(value) if "." in value else int(value)

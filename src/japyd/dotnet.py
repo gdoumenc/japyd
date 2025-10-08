@@ -7,13 +7,19 @@ from functools import cached_property
 from http import HTTPStatus
 
 from flask import Response, request
-from pydantic import (BaseModel, ConfigDict, Field, computed_field,
-                      field_validator, model_validator)
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 from werkzeug.exceptions import NotFound, UnprocessableEntity
 
-from japyd.jsonapi import Error, Resource, TopLevel
-from japyd.models import JsonApiBaseModel
-from japyd.utils import to_string_or_numeric
+from .jsonapi import Error, Resource, TopLevel
+from .models import JsonApiBaseModel
+from .utils import to_string_or_numeric
 
 
 class Oper(StrEnum):

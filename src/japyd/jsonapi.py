@@ -44,24 +44,13 @@ class Resource(BaseModel):
     meta: dict | None = None
 
 
-class __TopLevel(BaseModel):
+class TopLevel(BaseModel):
+    data: Resource | list[Resource] | None = None
     errors: list[Error] | None = None
     meta: dict | None = None
     jsonapi: JsonApi | None = None
     links: dict[str, AnyUrl | Link | None] | None = None
     included: list[Resource] | None = None
-
-
-class TopLevel(__TopLevel):
-    data: Resource | list[Resource] | None = None
-
-
-class TopLevelSingle(__TopLevel):
-    data: Resource
-
-
-class TopLevelArray(__TopLevel):
-    data: list[Resource]
 
 
 class JsonApiApp:

@@ -1,19 +1,16 @@
 import typing as t
 
 import pytest
-from flask import Flask
-from flask import request
+from flask import Flask, request
 from flask_pydantic import validate
 from pydantic import computed_field
 
-from japyd.dotnet import JsonApiBodyModel
-from japyd.dotnet import JsonApiQueryModel
-from japyd.dotnet import Oper
+from japyd.dotnet import JsonApiBodyModel, JsonApiQueryModel, Oper
 from japyd.models import JsonApiBaseModel
 
 
 class OtherBaseModel(JsonApiBaseModel):
-    attr1: str | None = "undefined"
+    attr1: str = "undefined"
 
     @computed_field
     @property
@@ -29,7 +26,7 @@ class ExampleBaseModel(JsonApiBaseModel):
 
 
 class ExampleBodyModel(JsonApiBodyModel):
-    data: ExampleBaseModel | None = None
+    data: ExampleBaseModel | None = None  # type: ignore
 
 
 @pytest.fixture()
@@ -69,32 +66,32 @@ class TestFilter:
 
     def test_parse(self, client):
         client.get("/", query_string={"filter": "equals(name,'Brian O''Connor')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "name"
         assert filter.oper == Oper.EQUALS
         assert filter.value == "Brian O'Connor"
         assert filter.other_attr is None
 
         client.get("/", query_string={"filter": "equals(attr1,null)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "attr1"
         assert filter.oper == Oper.EQUALS
         assert filter.value is None
         assert filter.other_attr is None
 
         client.get("/", query_string={"filter": "lessThan(price,'10')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "price"
         assert filter.oper == Oper.LESS_THAN
         assert filter.value == "10"
         assert filter.other_attr is None
 
         client.get("/", query_string={"filter": "lessOrEqual(attr1,attr2)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "attr1"
         assert filter.oper == Oper.LESS_OR_EQUAL
         assert filter.value is None
@@ -102,24 +99,24 @@ class TestFilter:
 
     def test_parse_spaces(self, client):
         client.get("/", query_string={"filter": " equals (name,'Brian O''Connor')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "name"
         assert filter.oper == Oper.EQUALS
         assert filter.value == "Brian O'Connor"
         assert filter.other_attr is None
 
         client.get("/", query_string={"filter": "equals(attr1,null) "})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "attr1"
         assert filter.oper == Oper.EQUALS
         assert filter.value is None
         assert filter.other_attr is None
 
         client.get("/", query_string={"filter": "lessThan( price , '10' )"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.attr == "price"
         assert filter.oper == Oper.LESS_THAN
         assert filter.value == "10"
@@ -127,36 +124,36 @@ class TestFilter:
 
     def test_parse_values(self, client):
         client.get("/", query_string={"filter": "equals(attr1,null)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.value is None
 
         client.get("/", query_string={"filter": "equals(attr1,'null')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.value == "null"
 
         client.get("/", query_string={"filter": "equals(attr1,0)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.value == 0
 
         client.get("/", query_string={"filter": "equals(attr1,0.0)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert isinstance(filter.value, float)
         assert filter.value == 0.0
 
         client.get("/", query_string={"filter": "equals(attr1.attr2,0.0)"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert isinstance(filter.value, float)
         assert filter.value == 0.0
 
     def test_parse_not(self, client):
         client.get("/", query_string={"filter": "not(equals(attr1,null) )"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.oper == Oper.NOT
         assert filter.subfilter.attr == "attr1"
         assert filter.subfilter.oper == Oper.EQUALS
@@ -164,30 +161,30 @@ class TestFilter:
 
     def test_parse_any(self, client):
         client.get("/", query_string={"filter": "any(attr1, 'test')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         assert filter.oper == Oper.ANY
         assert filter.attr == "attr1"
         assert filter.value == ["test"]
 
         client.get("/", query_string={"filter": "any(attr1, 'test', 'other')"})
-        assert len(request.query_params.filters) == 1
-        filter = next(iter(request.query_params.filters))
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
         ""
         assert filter.oper == Oper.ANY
         assert filter.attr == "attr1"
         assert filter.value == ["test", "other"]
 
-    # def test_parse_or(self):
-    #     query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
-    #     query = JsonApiQueryModel(filter=[query_filter])
-    #     assert len(query.filters) == 1
-    #     filter = next(iter(query.filters))
+    @pytest.mark.skip
+    def test_parse_or(self):
+        query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
+        query = JsonApiQueryModel(filter=[query_filter])
+        assert len(query.filters) == 1
+        filter = next(iter(query.filters))
 
-    @pytest.mark.wip
     def test_parse_filter_array(self, client):
         client.get("/", query_string={"filter[0]": "equals(attr1,0)", "filter[1]": "any(attr2, 'test', 'other')"})
-        filters = list(request.query_params.filters)
+        filters = list(request.query_params.filters)  # type: ignore
         assert len(filters) == 2
         assert filters[0].attr == "attr1"
         assert filters[0].oper == Oper.EQUALS

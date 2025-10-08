@@ -3,35 +3,30 @@ from __future__ import annotations
 import types
 import typing as t
 
-from pydantic import AnyUrl
-from pydantic import BaseModel
+from pydantic import AnyUrl, BaseModel
 
-from japyd.jsonapi import Link
-from japyd.jsonapi import Relationship
-from japyd.jsonapi import Resource
-from japyd.jsonapi import ResourceIdentifier
+from .jsonapi import Link, Relationship, Resource, ResourceIdentifier
 
 if t.TYPE_CHECKING:
-    from japyd.dotnet import JsonApiQueryModel
+    from .dotnet import JsonApiQueryModel
 
 
 class JsonApiBaseModel(BaseModel):
     """Base model for JSON:API resources."""
 
-    @property
-    def jsonapi_type(self) -> str:
-        return getattr(self, 'type', '')
+    jsonapi_type: t.ClassVar[str]
 
     @property
     def jsonapi_id(self) -> str:
-        return getattr(self, 'id', '')
+        return getattr(self, "id", "")
 
     @property
     def links(self) -> dict[str, AnyUrl | Link | None] | None:
         return None
 
-    def as_resource(self, included: list[Resource], query: JsonApiQueryModel, *,
-                    key_prefix: str | None = None) -> Resource:
+    def as_resource(
+        self, included: list[Resource], query: JsonApiQueryModel, *, key_prefix: str | None = None
+    ) -> Resource:
         jsonapi_id = self.jsonapi_id
         jsonapi_type = self.jsonapi_type
         relationships: dict[str, Relationship] = {}
@@ -47,7 +42,7 @@ class JsonApiBaseModel(BaseModel):
         fields = query.get_fields(jsonapi_type) if query else None
 
         # Creates relationships
-        excluded_attributes = {'id', 'type'}
+        excluded_attributes = {"id", "type"}
         for key, f in self.__class__.model_fields.items():
 
             if fields is not None and key not in fields:
@@ -58,7 +53,7 @@ class JsonApiBaseModel(BaseModel):
             if issubtype(f.annotation, JsonApiBaseModel) and value is not None:  # type: ignore[arg-type]
 
                 # Bypass if annotated as a dict
-                if 'as_attribute' in f.metadata:
+                if "as_attribute" in f.metadata:
                     continue
 
                 if isinstance(value, list):
@@ -70,8 +65,17 @@ class JsonApiBaseModel(BaseModel):
 
         # Creates resource with attributes and relationships
         attributes = self.model_dump(include=fields, exclude=excluded_attributes)
-        return Resource(id=jsonapi_id, type=jsonapi_type,
-                        attributes=attributes, relationships=relationships, links=self.links)
+        return Resource(
+            id=jsonapi_id, type=jsonapi_type, attributes=attributes, relationships=relationships, links=self.links
+        )
+
+
+class JapydDictBaseModel(JsonApiBaseModel):
+    """Base model for JSON:API resources."""
+
+    @property
+    def jsonapi_type(self) -> str:
+        return getattr(self, "type", "")
 
 
 T = t.TypeVar("T", bound="BaseModel")

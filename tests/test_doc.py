@@ -4,9 +4,7 @@ import pytest
 from flask import Flask
 from flask_pydantic import validate
 
-from japyd import JsonApiBaseModel
-from japyd import JsonApiQueryModel
-from japyd import TopLevel
+from japyd import JsonApiBaseModel, JsonApiQueryModel, Resource, TopLevel
 
 
 class Product(JsonApiBaseModel):
@@ -43,7 +41,15 @@ def client():
 def test_request(client):
     response = client.get("/orders/3?include=items")
     top = TopLevel.model_validate(response.json)
+
+    assert isinstance(top.data, Resource)
+
     assert top.data.id == "3"
-    assert top.data.attributes['status'] == 'open'
-    assert len(top.data.relationships['items'].data) == 1
+    assert top.data.attributes["status"] == "open"
+
+    assert top.data.relationships is not None
+    assert top.included is not None
+    assert isinstance(top.data.relationships["items"].data, list)
+
+    assert len(top.data.relationships["items"].data) == 1
     assert top.included[0].type == "product"

@@ -23,6 +23,8 @@ dev = [
     "cloudsmith-cli>=1.8.3",
     "codecov>=2.1.13",
     "pytest-cov>=6.2.1",
+    "pip>=25.2",
+    "types-requests>=2.31.0.6",
 ]
 
 [build-system]

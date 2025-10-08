@@ -3,7 +3,7 @@ from __future__ import annotations
 import types
 import typing as t
 
-from pydantic import AnyUrl, BaseModel
+from pydantic import AnyUrl, BaseModel, Field
 
 from .jsonapi import Link, Relationship, Resource, ResourceIdentifier
 
@@ -14,7 +14,7 @@ if t.TYPE_CHECKING:
 class JsonApiBaseModel(BaseModel):
     """Base model for JSON:API resources."""
 
-    jsonapi_type: t.ClassVar[str]
+    jsonapi_type: t.ClassVar[str] = Field(frozen=True)
 
     @property
     def jsonapi_id(self) -> str:
@@ -76,6 +76,10 @@ class JapydDictBaseModel(JsonApiBaseModel):
     @property
     def jsonapi_type(self) -> str:
         return getattr(self, "type", "")
+    
+    @jsonapi_type.setter
+    def jsonapi_type(self, value:str) -> None:  # type: ignore
+        assert False, "Cannot change the type of a resource."
 
 
 T = t.TypeVar("T", bound="BaseModel")

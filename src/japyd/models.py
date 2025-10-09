@@ -34,7 +34,9 @@ class JsonApiBaseModel(BaseModel):
         def _add_in_included(value, prefixed_key: str) -> ResourceIdentifier:
             """Adds the value in the included list if it is included in the query and returns a ResourceIdentifier."""
             if query.include and prefixed_key in query.include:
-                included.append(value.as_resource(included, query, key_prefix=prefixed_key))
+                to_be_incl: Resource = value.as_resource(included, query, key_prefix=prefixed_key)
+                if len([r for r in included if r.type == to_be_incl.type and r.id == to_be_incl.id]) == 0:
+                    included.append(to_be_incl)
             if isinstance(value, ResourceIdentifier):
                 return value
             return ResourceIdentifier(type=value.jsonapi_type, id=value.jsonapi_id)
@@ -76,9 +78,9 @@ class JapydDictBaseModel(JsonApiBaseModel):
     @property
     def jsonapi_type(self) -> str:
         return getattr(self, "type", "")
-    
+
     @jsonapi_type.setter
-    def jsonapi_type(self, value:str) -> None:  # type: ignore
+    def jsonapi_type(self, value: str) -> None:  # type: ignore
         assert False, "Cannot change the type of a resource."
 
 

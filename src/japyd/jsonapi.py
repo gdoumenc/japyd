@@ -43,6 +43,9 @@ class Resource(BaseModel):
     links: dict[str, AnyUrl | Link | None] | None = None
     meta: dict | None = None
 
+    def flatten(self):
+        return {"id": self.id, **self.attributes}
+
 
 class TopLevel(BaseModel):
     data: Resource | list[Resource] | None = None

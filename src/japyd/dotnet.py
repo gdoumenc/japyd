@@ -245,7 +245,9 @@ class JsonApiQueryModel(BaseModel):
 
     @field_validator("include", mode="before")
     @classmethod
-    def parse_include(cls, include: list[str] | None) -> set[str]:
+    def parse_include(cls, include: set[str] | list[str] | None) -> set[str]:
+        if isinstance(include, set):
+            return include
         return set(include[0].split(",")) if include else set()
 
     def _parse_filter(self, filter: str) -> JsonApiQueryFilter:

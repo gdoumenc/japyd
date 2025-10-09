@@ -49,7 +49,6 @@ testpaths = "tests"
 markers = [
     "wip",
 ]
-addopts = "--cov --cov-report=xml"
 
 [[tool.mypy.overrides]]
 module = ["jsonapi_pydantic.*"]

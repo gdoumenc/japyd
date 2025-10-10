@@ -1,6 +1,6 @@
 [project]
 name = "japyd"
-version = "0.1.12"
+version = "0.1.13"
 description = "Automate JSON:API relationships with Pydantic. No manual mapping, just clean code."
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },

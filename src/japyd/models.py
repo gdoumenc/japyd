@@ -88,10 +88,10 @@ T = t.TypeVar("T", bound="BaseModel")
 UnionType = getattr(types, "UnionType", t.Union)
 
 
-def issubtype(type_: t.Type, of_class: t.Generic[T]) -> T | None:  # type: ignore
+def issubtype(type_: t.Type, of_class: t.Generic[T]) -> T | None:  # type: ignore[valid-type]
     """Returns the subtype of a generic type if it is a subtype of the given class."""
     try:
-        if issubclass(type(type_), types.GenericAlias) or issubclass(type_, t.Generic):  # type: ignore
+        if issubclass(type(type_), types.GenericAlias) or issubclass(type_, t.Generic): # type: ignore[arg-type]
             type_ = t.get_args(type_)[0]
     except TypeError:
         pass
@@ -104,4 +104,8 @@ def issubtype(type_: t.Type, of_class: t.Generic[T]) -> T | None:  # type: ignor
                 return type__
         return None
 
-    return origin if issubclass(origin, of_class) else None  # type: ignore
+    try:
+        return origin if issubclass(origin, of_class) else None  # type: ignore
+    except TypeError:
+        # Should check for ForwardRef
+        return None

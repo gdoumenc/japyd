@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, Response, make_response, request
 from pydantic import AnyUrl, BaseModel, Field
 from werkzeug.exceptions import HTTPException
 
@@ -68,28 +68,45 @@ class JsonApiApp:
     def init_app(self, app: Flask):
         self.app = app
 
-        handle_http_exception = app.handle_http_exception
+        handle_exception = app.error_handler_spec[None][None].get(Exception)
         app.after_request(self._change_content_type)
 
-        def _handle_http_exception(e: HTTPException):
-            err = handle_http_exception(e)
-            if isinstance(err, HTTPException):
-                errors = [
-                    Error(id=e.name, title=e.name, detail=e.description, status=str(err.code))
-                    # type: ignore[union-attr]
-                ]
-                return (
-                    TopLevel(errors=errors).model_dump_json(exclude_none=True),  # type: ignore[union-attr]
-                    err.code,
-                    {"Content-Type": "application/vnd.api+json"},
-                )
-            return err
+        def _handle_exception(e: Exception) -> Response:
+            status_code: str
+            title: str
+            detail: str
+            if handle_exception:
+                resp = handle_exception(e)
+                if not isinstance(resp, Response):
+                    resp = make_response(resp)
+                status_code = str(resp.status_code)
+                title = str(e)
+                detail = str(resp.data)
+            else:
+                if isinstance(e, HTTPException):
+                    status_code = str(e.code or 500)
+                    title = e.name
+                    detail = e.description or str(e)
+                else:
+                    status_code = "500"
+                    title = type(e).__name__
+                    detail = str(e)
 
-        app.handle_http_exception = _handle_http_exception  # type: ignore[method-assign]
+            error = Error(id=status_code, title=title, detail=detail, status=status_code)
+            toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)
+            return make_response(toplevel, status_code, {"Content-Type": "application/vnd.api+json"})
 
-    def _change_content_type(self, response):
+        app.error_handler_spec[None][None][Exception] = _handle_exception
+
+    def _change_content_type(self, resp: Response):
+        if resp.content_type != "application/vnd.api+json" and resp.status_code >= 400:
+            status_code: str = str(resp.status_code)
+            error = Error(id=status_code, title=resp.data, detail=resp.data, status=status_code)
+            toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)
+            return make_response(toplevel, resp.status_code, {"Content-Type": "application/vnd.api+json"})
+
         if "application/vnd.api+json" not in request.headers.getlist("accept"):
-            return response
+            return resp
 
-        response.content_type = "application/vnd.api+json"
-        return response
+        resp.content_type = "application/vnd.api+json"
+        return resp

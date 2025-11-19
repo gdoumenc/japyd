@@ -112,10 +112,10 @@ class JsonApiQueryModel(BaseModel):
 
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
-    fields: dict[str, list[str]] | None = Field(default_factory=dict)
-    filter: t.Union[list[str], None] = None
-    include: t.Union[set[str], None] = Field(default_factory=set)
-    sort: t.Union[str, None] = None
+    fields: dict[str, list[str]] = Field(default_factory=dict)
+    filter: list[str] | None = None
+    include: set[str] = Field(default_factory=set)
+    sort: str | None = None
 
     @computed_field  # type: ignore[misc]
     @cached_property
@@ -219,7 +219,7 @@ class JsonApiQueryModel(BaseModel):
     @staticmethod
     def not_found(detail: str | None = None) -> tuple[TopLevel, int]:
         error = NotFound(description=detail)
-        return JsonApiQueryModel.error(error.code, error.name, error.get_description()) # type: ignore
+        return JsonApiQueryModel.error(error.code, error.name, error.get_description())  # type: ignore
 
     @model_validator(mode="before")
     def parse_filter_fields(cls, data: dict) -> dict:

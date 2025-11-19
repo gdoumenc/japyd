@@ -75,22 +75,26 @@ class JsonApiApp:
             status_code: str
             title: str
             detail: str
+
             if handle_exception:
-                resp = handle_exception(e)
-                if not isinstance(resp, Response):
-                    resp = make_response(resp)
-                status_code = str(resp.status_code)
-                title = str(e)
-                detail = str(resp.data)
+                try:
+                    resp = handle_exception(e)
+                    if not isinstance(resp, Response):
+                        resp = make_response(resp)
+                    status_code = str(resp.status_code)
+                    title = str(e)
+                    detail = str(resp.data)
+                except Exception as ex:
+                    e = ex
+
+            if isinstance(e, HTTPException):
+                status_code = str(e.code or 500)
+                title = e.name
+                detail = e.description or str(e)
             else:
-                if isinstance(e, HTTPException):
-                    status_code = str(e.code or 500)
-                    title = e.name
-                    detail = e.description or str(e)
-                else:
-                    status_code = "500"
-                    title = type(e).__name__
-                    detail = str(e)
+                status_code = "500"
+                title = type(e).__name__
+                detail = str(e)
 
             error = Error(id=status_code, title=title, detail=detail, status=status_code)
             toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)

@@ -3,18 +3,10 @@ from __future__ import annotations
 import re
 import typing as t
 from enum import StrEnum
-from functools import cached_property
 from http import HTTPStatus
 
 from flask import Response, request
-from pydantic import (
-    BaseModel,
-    ConfigDict,
-    Field,
-    computed_field,
-    field_validator,
-    model_validator,
-)
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from werkzeug.exceptions import NotFound, UnprocessableEntity
 
 from .jsonapi import Error, Resource, TopLevel
@@ -113,17 +105,9 @@ class JsonApiQueryModel(BaseModel):
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
     fields: dict[str, list[str]] = Field(default_factory=dict)
-    filter: list[str] | None = None
+    filters: list[JsonApiQueryFilter] = Field(default_factory=list)
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
-
-    @computed_field  # type: ignore[misc]
-    @cached_property
-    def filters(self) -> t.Sequence[JsonApiQueryFilter]:
-        """Returns an iterator over the filters from the query."""
-        if isinstance(self.filter, t.Iterable):
-            return [self._parse_filter(f) for f in self.filter]
-        return []
 
     def get_fields(self, jsonapi_type) -> set[str] | None:
         """Returns the list of fields to dump for the given JSON API type."""
@@ -223,11 +207,11 @@ class JsonApiQueryModel(BaseModel):
 
     @model_validator(mode="before")
     def parse_filter_fields(cls, data: dict) -> dict:
-        filter = []
+        filters = []
         fields = {}
         for arg, value in data.items():
-            if arg.startswith("filter["):
-                filter.append(value)
+            if arg.startswith("filter"):
+                filters.append(cls._parse_filter(value))
             elif arg.startswith("fields["):
                 groups = FIELDS_REGEXP.match(arg)
                 if groups:
@@ -236,8 +220,8 @@ class JsonApiQueryModel(BaseModel):
                     msg = f"Wrong fields parameters: {arg}"
                     raise UnprocessableEntity(msg)
 
-        if filter:
-            data["filter"] = filter
+        if filters:
+            data["filters"] = filters
         if fields:
             data["fields"] = fields
 
@@ -250,11 +234,12 @@ class JsonApiQueryModel(BaseModel):
             return include
         return set(include[0].split(",")) if include else set()
 
-    def _parse_filter(self, filter: str) -> JsonApiQueryFilter:
+    @classmethod
+    def _parse_filter(cls, filter: str) -> JsonApiQueryFilter:
         if reg := COMPILED_FILTER_REGEXP.match(filter):
             oper = reg.group("oper")
             if oper:
-                value = self._parse_value(reg)
+                value = cls._parse_value(reg)
                 other = reg.group("other_attr")
                 return JsonApiQueryFilter(
                     oper=Oper(oper), attr=reg.group("attr"), value=value, other_attr=other if other != "null" else None
@@ -266,17 +251,18 @@ class JsonApiQueryModel(BaseModel):
 
         if reg := COMPILED_NOT_REGEXP.match(filter):
             filter_expr = reg.group("filter")
-            return JsonApiQueryFilter(oper=Oper.NOT, subfilter=self._parse_filter(filter_expr))
+            return JsonApiQueryFilter(oper=Oper.NOT, subfilter=cls._parse_filter(filter_expr))
         if reg := COMPILED_OR_AND_REGEXP.match(filter):
             filter1_expr = reg.group("filter1")
             filter2_expr = reg.group("filter2")
             return JsonApiQueryFilter(
-                oper=Oper.NOT, subfilter=(self._parse_filter(filter1_expr), self._parse_filter(filter2_expr))
+                oper=Oper.NOT, subfilter=(cls._parse_filter(filter1_expr), cls._parse_filter(filter2_expr))
             )
         msg = f"Wrong filter parameters: {filter}"
         raise UnprocessableEntity(msg)
 
-    def _parse_value(self, reg):
+    @classmethod
+    def _parse_value(cls, reg):
         numeric = reg.group("numeric")
         if numeric:
             value = float(numeric) if "." in numeric else int(numeric)
@@ -289,22 +275,34 @@ class JsonApiQueryModel(BaseModel):
         return value
 
 
-class JsonApiBodyModel(BaseModel):
+class _JsonApiBodyModel(BaseModel):
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
-    data: Resource | list[Resource] | None = None
     included: list[Resource] | None = Field(default_factory=list)
     debug: bool = False
 
+
+class JsonApiBodyModel(_JsonApiBodyModel):
+    data: Resource | list[Resource] | None = None
+
     @property
-    def attributes(self):
+    def attributes(self) -> dict[str, t.Any] | list[dict[str, t.Any]]:
         if isinstance(self.data, list):
             return [d.attributes for d in self.data]
-        return self.data.attributes if self.data else None
+        return self.data.attributes if self.data else {}
+
+
+class SingleBodyModel(_JsonApiBodyModel):
+    data: Resource | None = None
 
     @property
-    def values(self):
-        import warnings
+    def attributes(self) -> dict[str, t.Any]:
+        return self.data.attributes if self.data else {}
 
-        warnings.warn("Deprecated. Use 'attributes' instead.")
-        return self.data
+
+class MultiBodyModel(_JsonApiBodyModel):
+    data: list[Resource] = Field(default_factory=list)
+
+    @property
+    def attributes(self) -> list[dict[str, t.Any]]:
+        return [d.attributes for d in self.data]

@@ -6,6 +6,7 @@ import typing as t
 from pydantic import AnyUrl, BaseModel, Field
 
 from .jsonapi import Link, Relationship, Resource, ResourceIdentifier
+from .utils import flatten_resource
 
 if t.TYPE_CHECKING:
     from .dotnet import JsonApiQueryModel
@@ -23,6 +24,12 @@ class JsonApiBaseModel(BaseModel):
     @property
     def links(self) -> dict[str, AnyUrl | Link | None] | None:
         return None
+
+    @classmethod
+    def from_resource(cls, res: Resource):
+        if res.type != cls.jsonapi_type:
+            raise ValueError(f"The resource type must be {cls.jsonapi_type}.")
+        return cls.model_validate(flatten_resource(res))
 
     def as_resource(
         self, included: list[Resource], query: JsonApiQueryModel, *, key_prefix: str | None = None
@@ -91,7 +98,7 @@ UnionType = getattr(types, "UnionType", t.Union)
 def issubtype(type_: t.Type, of_class: t.Generic[T]) -> T | None:  # type: ignore[valid-type]
     """Returns the subtype of a generic type if it is a subtype of the given class."""
     try:
-        if issubclass(type(type_), types.GenericAlias) or issubclass(type_, t.Generic): # type: ignore[arg-type]
+        if issubclass(type(type_), types.GenericAlias) or issubclass(type_, t.Generic):  # type: ignore[arg-type]
             type_ = t.get_args(type_)[0]
     except TypeError:
         pass

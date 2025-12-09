@@ -1,4 +1,4 @@
-from .client import JapydClient, TopLevelArray, TopLevelSingle
+from .client import JapydClient
 from .dotnet import (
     JsonApiBaseModel,
     JsonApiBodyModel,
@@ -10,9 +10,11 @@ from .jsonapi import (
     Error,
     JsonApiApp,
     Link,
+    MultiResourcesTopLevel,
     Relationship,
     Resource,
     ResourceIdentifier,
+    SingleResourceTopLevel,
     TopLevel,
 )
 
@@ -30,6 +32,6 @@ __all__ = [
     "JsonApiQueryModel",
     "JsonApiBodyModel",
     "JapydClient",
-    "TopLevelSingle",
-    "TopLevelArray",
+    "SingleResourceTopLevel",
+    "MultiResourcesTopLevel",
 ]

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from flask import Flask, Response, make_response, request
 from pydantic import AnyUrl, BaseModel, Field
 from werkzeug.exceptions import HTTPException
@@ -54,6 +56,26 @@ class TopLevel(BaseModel):
     jsonapi: JsonApi | None = None
     links: dict[str, AnyUrl | Link | None] | None = None
     included: list[Resource] | None = None
+
+
+class SingleResourceTopLevel(TopLevel):
+    data: Resource | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    @classmethod
+    def empty(cls, meta=None, jsonapi=None, links=None) -> SingleResourceTopLevel:
+        if meta is None:
+            meta = {"count": 0}
+        return cls(data=None, meta=meta, jsonapi=jsonapi, links=links)
+
+
+class MultiResourcesTopLevel(TopLevel):
+    data: list[Resource] | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    @classmethod
+    def empty(cls, meta=None, jsonapi=None, links=None) -> MultiResourcesTopLevel:
+        if meta is None:
+            meta = {"count": 0}
+        return cls(data=[], meta=meta, jsonapi=jsonapi, links=links)
 
 
 class JsonApiApp:

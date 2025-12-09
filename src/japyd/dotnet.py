@@ -9,7 +9,13 @@ from flask import Response, request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from werkzeug.exceptions import NotFound, UnprocessableEntity
 
-from .jsonapi import Error, Resource, TopLevel
+from .jsonapi import (
+    Error,
+    MultiResourcesTopLevel,
+    Resource,
+    SingleResourceTopLevel,
+    TopLevel,
+)
 from .models import JsonApiBaseModel
 from .utils import to_string_or_numeric
 
@@ -138,7 +144,7 @@ class JsonApiQueryModel(BaseModel):
         """Returns a no content response."""
         return Response(status=HTTPStatus.NO_CONTENT)
 
-    def one(self, value: JsonApiBaseModel) -> TopLevel:
+    def one(self, value: JsonApiBaseModel) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
         if value is None:
             raise NotFound()
@@ -147,21 +153,18 @@ class JsonApiQueryModel(BaseModel):
         meta = {
             "count": 1,
         }
-        return TopLevel(data=value.as_resource(included, self), included=included, meta=meta)  # noqa
+        return SingleResourceTopLevel(data=value.as_resource(included, self), included=included, meta=meta)  # noqa
 
-    def one_or_none(self, value: JsonApiBaseModel) -> TopLevel:
+    def one_or_none(self, value: JsonApiBaseModel) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
         if value is None:
-            meta = {
-                "count": 0,
-            }
-            return TopLevel(data=[], meta=meta)  # noqa
+            return MultiResourcesTopLevel.empty()
 
         return self.one(value)
 
     def paginate(
         self, values: list[Resource | JsonApiBaseModel], *, full_list: bool = True, total: int | None = None
-    ) -> TopLevel:
+    ) -> MultiResourcesTopLevel:
         """Returns multi JSON:API toplevel's data from a value iterable.
 
         :param values: List for pagination.
@@ -191,7 +194,7 @@ class JsonApiQueryModel(BaseModel):
             },
         }
         resources: list[Resource] = [v if isinstance(v, Resource) else v.as_resource(included, self) for v in values]
-        return TopLevel.model_validate({"data": resources, "included": included, "meta": meta})
+        return MultiResourcesTopLevel.model_validate({"data": resources, "included": included, "meta": meta})
 
     @staticmethod
     def error(code: int, title: str, detail: str) -> tuple[TopLevel, int]:
@@ -279,6 +282,7 @@ class _JsonApiBodyModel(BaseModel):
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
     included: list[Resource] | None = Field(default_factory=list)
+    meta: dict | None = None
     debug: bool = False
 
 

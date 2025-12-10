@@ -57,6 +57,13 @@ class TopLevel(BaseModel):
     links: dict[str, AnyUrl | Link | None] | None = None
     included: list[Resource] | None = None
 
+    @classmethod
+    def http_error(
+        cls, code: int | None, title: str, detail: str, status: str | None = None
+    ) -> tuple[TopLevel, int, dict]:
+        errors = [Error(id=str(code), title=title, detail=detail, status=status or str(code))]
+        return TopLevel(errors=errors), code or 500, {"Content-Type": "application/vnd.api+json"}
+
 
 class SingleResourceTopLevel(TopLevel):
     data: Resource | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
@@ -69,7 +76,7 @@ class SingleResourceTopLevel(TopLevel):
 
 
 class MultiResourcesTopLevel(TopLevel):
-    data: list[Resource] | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
+    data: list[Resource] = Field(default_factory=list)  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def empty(cls, meta=None, jsonapi=None, links=None) -> MultiResourcesTopLevel:
@@ -88,6 +95,10 @@ class JsonApiApp:
             self.init_app(app)
 
     def init_app(self, app: Flask):
+        """
+        - Adds exception handler to transform any exception to TopLevel error.
+        - Forces response content type to JSON:API.
+        """
         self.app = app
 
         handle_exception = app.error_handler_spec[None][None].get(Exception)
@@ -124,13 +135,7 @@ class JsonApiApp:
 
         app.error_handler_spec[None][None][Exception] = _handle_exception
 
-    def _change_content_type(self, resp: Response):
-        if resp.content_type != "application/vnd.api+json" and resp.status_code >= 400:
-            status_code: str = str(resp.status_code)
-            error = Error(id=status_code, title=resp.data, detail=resp.data, status=status_code)
-            toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)
-            return make_response(toplevel, resp.status_code, {"Content-Type": "application/vnd.api+json"})
-
+    def _change_content_type(self, resp: Response) -> Response:
         if "application/vnd.api+json" not in request.headers.getlist("accept"):
             return resp
 

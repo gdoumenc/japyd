@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import re
 import typing as t
-from enum import StrEnum
 from http import HTTPStatus
 
 from flask import Response, request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from werkzeug.exceptions import NotFound, UnprocessableEntity
 
+from .filter import Oper
 from .jsonapi import (
     Error,
     MultiResourcesTopLevel,
@@ -18,26 +18,6 @@ from .jsonapi import (
 )
 from .models import JsonApiBaseModel
 from .utils import to_string_or_numeric
-
-
-class Oper(StrEnum):
-    NOT = "not"
-    OR = "or"
-    AND = "and"
-
-    EQUALS = "equals"
-    LESS_THAN = "lessThan"
-    LESS_OR_EQUAL = "lessOrEqual"
-    GREATER_THAN = "greaterThan"
-    GREATER_OR_EQUAL = "greaterOrEqual"
-
-    CONTAINS = "contains"
-    STARTS_WITH = "startsWith"
-    ENDS_WITH = "endsWith"
-
-    ANY = "any"  # Equals one value from set
-    HAS = "has"  # Collection contains items
-
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
 
@@ -95,6 +75,14 @@ class JsonApiQueryFilter(BaseModel):
         return data
 
     def match(self, model) -> bool:
+        if self.oper in (
+            Oper.EQUALS,
+            Oper.LESS_THAN,
+            Oper.LESS_OR_EQUAL,
+            Oper.GREATER_THAN,
+            Oper.GREATER_OR_EQUAL,
+        ):
+            return model.match(self.oper, self.attr, self.value)
         return False
 
 

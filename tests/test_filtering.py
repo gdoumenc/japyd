@@ -5,7 +5,12 @@ from flask import Flask, request
 from flask_pydantic import validate
 from pydantic import computed_field
 
-from japyd.dotnet import JsonApiBodyModel, JsonApiQueryModel, Oper
+from japyd.dotnet import (
+    JsonApiBodyModel,
+    JsonApiQueryModel,
+    Oper,
+    SingleResourceTopLevel,
+)
 from japyd.models import JsonApiBaseModel
 
 
@@ -26,7 +31,7 @@ class ExampleBaseModel(JsonApiBaseModel):
 
 
 class ExampleBodyModel(JsonApiBodyModel):
-    data: ExampleBaseModel | None = None  # type: ignore
+    data: ExampleBaseModel | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
 
 @pytest.fixture()
@@ -44,7 +49,7 @@ def client():
         example = ExampleBaseModel()
         if query.match(example):
             return example.as_resource([], query)
-        return "", 204
+        return SingleResourceTopLevel.empty()
 
     @pytest_app.route("/example", methods=["POST"])
     @validate(exclude_none=True)
@@ -55,8 +60,8 @@ def client():
             example = ExampleBaseModel()
 
         if query.match(example):
-            return example.as_resource([], query)
-        return "", 204
+            return SingleResourceTopLevel(data=example.as_resource([], query))
+        return SingleResourceTopLevel.empty()
 
     with pytest_app.test_client() as client:
         yield client
@@ -175,10 +180,9 @@ class TestFilter:
         assert filter.attr == "attr1"
         assert filter.value == ["test", "other"]
 
-    @pytest.mark.skip
     def test_parse_or(self):
         query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
-        query = JsonApiQueryModel(filter=[query_filter])
+        query = JsonApiQueryModel.model_validate({"filter": query_filter})
         assert len(query.filters) == 1
         filter = next(iter(query.filters))
 
@@ -192,7 +196,6 @@ class TestFilter:
         assert filters[1].oper == Oper.ANY
 
 
-@pytest.mark.skip
 class TestReturnedValue:
 
     def test_match(self, client):
@@ -203,59 +206,48 @@ class TestReturnedValue:
         assert example.notice == 10
 
         res = client.get("/example", query_string={"filter": "not(equals(name,'Brian O''Connor'))"})
-        assert res.status_code == 204
+        assert res.status_code == 200
+        assert "data" not in res.json
+        assert "meta" in res.json
+        assert "count" in res.json["meta"]
+        assert res.json["meta"]["count"] == 0
 
-        res = client.post(
-            "/example",
-            query_string={"filter": "lessThan(notice, 5)"},
-            json={},
-            headers={"Content-Type": "application/vnd.api+json"},
-        )
-        assert res.status_code == 204
-        res = client.post(
-            "/example",
-            query_string={"filter": "greaterThan(notice, 5)"},
-            json={},
-            headers={"Content-Type": "application/vnd.api+json"},
-        )
+        res = client.post("/example", query_string={"filter": "lessThan(notice, 5)"}, json={})
+        assert res.status_code == 200
+        res = client.post("/example", query_string={"filter": "greaterThan(notice, 5)"}, json={})
         assert res.status_code == 200
 
-        res = client.post(
-            "/example", json={"data": {"notice": 15}}, headers={"Content-Type": "application/vnd.api+json"}
-        )
+        res = client.post("/example", json={"data": {"notice": 15}})
         assert res.status_code == 200
-        example = ExampleBaseModel(**res.json["attributes"])
+        example = ExampleBaseModel(**res.json["data"]["attributes"])
         assert example.notice == 15
         res = client.post(
-            "/example",
-            json={"data": {"notice": 15}},
-            query_string={"filter": "greaterOrEqual(notice, 15)"},
-            headers={"Content-Type": "application/vnd.api+json"},
+            "/example", json={"data": {"notice": 15}}, query_string={"filter": "greaterOrEqual(notice, 15)"}
         )
         assert res.status_code == 200
-        example = ExampleBaseModel(**res.json["attributes"])
+        example = ExampleBaseModel(**res.json["data"]["attributes"])
         assert example.notice == 15
 
-    def test_fields(self, client):
-        # res = client.get('/example')
-        # assert res.status_code == 200
-        # assert 'name' in res.json['attributes']
-        # assert 'notice' in res.json['attributes']
-        # assert 'other' in res.json['attributes']
-        # res = client.get('/example', query_string={"fields[example]": "name"})
-        # assert res.status_code == 200
-        # assert 'name' in res.json['attributes']
-        # assert 'notice' not in res.json['attributes']
-        # assert 'other' not in res.json['attributes']
+    # def test_fields(self, client):
+    # res = client.get('/example')
+    # assert res.status_code == 200
+    # assert 'name' in res.json['attributes']
+    # assert 'notice' in res.json['attributes']
+    # assert 'other' in res.json['attributes']
+    # res = client.get('/example', query_string={"fields[example]": "name"})
+    # assert res.status_code == 200
+    # assert 'name' in res.json['attributes']
+    # assert 'notice' not in res.json['attributes']
+    # assert 'other' not in res.json['attributes']
 
-        res = client.post(
-            "/example",
-            json={"data": {"notice": 15, "other": {"attr1": "test"}}},
-            query_string={"filter": "greaterOrEqual(notice, 15)"},
-            headers={"Content-Type": "application/vnd.api+json"},
-        )
-        assert res.status_code == 200
-        example = ExampleBaseModel(**res.json["attributes"])
-        assert example.notice == 15
-        assert "other" not in res.json["attributes"]
-        assert "other" in res.json["relationships"]
+    # res = client.post(
+    #     "/example",
+    #     json={"data": {"notice": 15, "other": {"attr1": "test"}}},
+    #     query_string={"filter": "greaterOrEqual(notice, 15)"},
+    #     headers={"Content-Type": "application/vnd.api+json"},
+    # )
+    # assert res.status_code == 200
+    # example = ExampleBaseModel(**res.json["attributes"])
+    # assert example.notice == 15
+    # assert "other" not in res.json["attributes"]
+    # assert "other" in res.json["relationships"]

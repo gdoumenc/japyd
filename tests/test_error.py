@@ -27,6 +27,12 @@ def get_exception():
     raise NotImplementedError("abstract")
 
 
+@app.route("/make_error")
+@validate(exclude_none=True)
+def make_error():
+    return TopLevel.http_error(422, "title", "detail")
+
+
 @pytest.fixture()
 def client():
     return app.test_client()
@@ -35,6 +41,7 @@ def client():
 def test_exception(client):
     response = client.get("/")
     assert response.status_code == 422
+    assert "application/vnd.api+json" in response.headers["Content-Type"]
     top = TopLevel.model_validate(response.json)
 
     assert top.errors
@@ -44,18 +51,26 @@ def test_exception(client):
 
     response = client.get("/error")
     assert response.status_code == 405
-    top = TopLevel.model_validate(response.json)
-
-    assert top.errors
-    assert len(top.errors) == 1
-    assert top.errors[0].title == "error"
-    assert top.errors[0].detail == "error"
+    assert "application/vnd.api+json" not in response.headers["Content-Type"]
+    assert response.text == "error"
+    assert response.json is None
 
     response = client.get("/exception")
     assert response.status_code == 500
+    assert "application/vnd.api+json" in response.headers["Content-Type"]
     top = TopLevel.model_validate(response.json)
 
     assert top.errors
     assert len(top.errors) == 1
     assert top.errors[0].title == "NotImplementedError"
     assert top.errors[0].detail == "abstract"
+
+
+def test_error(client):
+    response = client.get("/make_error")
+    assert response.status_code == 422
+    assert "application/vnd.api+json" in response.headers["Content-Type"]
+    top = TopLevel.model_validate(response.json)
+    assert top.errors
+    assert len(top.errors) == 1
+    assert top.errors[0].title == "title"

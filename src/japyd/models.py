@@ -5,6 +5,7 @@ import typing as t
 
 from pydantic import AnyUrl, BaseModel, Field
 
+from .filter import Oper
 from .jsonapi import Link, Relationship, Resource, ResourceIdentifier
 from .utils import flatten_resource
 
@@ -77,6 +78,19 @@ class JsonApiBaseModel(BaseModel):
         return Resource(
             id=jsonapi_id, type=jsonapi_type, attributes=attributes, relationships=relationships, links=self.links
         )
+
+    def match(self, oper:Oper, attr: str, value: t.Any) -> bool:
+        if oper == Oper.EQUALS:
+            return getattr(self, attr) == value
+        if oper == Oper.LESS_THAN:
+            return getattr(self, attr) < value
+        if oper == Oper.LESS_OR_EQUAL:
+            return getattr(self, attr) <= value
+        if oper == Oper.GREATER_THAN:
+            return getattr(self, attr) > value
+        if oper == Oper.GREATER_OR_EQUAL:
+            return getattr(self, attr) >= value
+        return False
 
 
 class JapydDictBaseModel(JsonApiBaseModel):

@@ -1,7 +1,6 @@
 import typing as t
 
 import requests
-from pydantic import AnyUrl, BaseModel
 
 from .jsonapi import MultiResourcesTopLevel, SingleResourceTopLevel
 

@@ -151,7 +151,7 @@ class JsonApiQueryModel(BaseModel):
         return self.one(value)
 
     def paginate(
-        self, values: list[Resource | JsonApiBaseModel], *, full_list: bool = True, total: int | None = None
+        self, values: t.Sequence[Resource | JsonApiBaseModel], *, full_list: bool = True, total: int | None = None
     ) -> MultiResourcesTopLevel:
         """Returns multi JSON:API toplevel's data from a value iterable.
 

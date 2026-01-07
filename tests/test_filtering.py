@@ -63,6 +63,13 @@ def client():
             return SingleResourceTopLevel(data=example.as_resource([], query))
         return SingleResourceTopLevel.empty()
 
+    @pytest_app.route("/multi", methods=["GET"])
+    @validate(exclude_none=True)
+    def get_multi(query: JsonApiQueryModel):
+        assert query.filters is not None
+        assert len(query.filters) == 2
+        return SingleResourceTopLevel.empty()
+
     with pytest_app.test_client() as client:
         yield client
 
@@ -228,6 +235,11 @@ class TestReturnedValue:
         example = ExampleBaseModel(**res.json["data"]["attributes"])
         assert example.notice == 15
 
+class TestMultiFilter:
+
+    def test_multi(self, client):
+        res = client.get("/multi?filter=equals(name,'Brian O''Connor')&filter=equals(notice,10)")
+        assert res.status_code == 200
     # def test_fields(self, client):
     # res = client.get('/example')
     # assert res.status_code == 200

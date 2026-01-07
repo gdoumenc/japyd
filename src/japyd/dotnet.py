@@ -99,6 +99,7 @@ class JsonApiQueryModel(BaseModel):
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
     fields: dict[str, list[str]] = Field(default_factory=dict)
+    filter: list[str] = Field(default_factory=list)
     filters: list[JsonApiQueryFilter] = Field(default_factory=list)
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
@@ -201,7 +202,9 @@ class JsonApiQueryModel(BaseModel):
         filters = []
         fields = {}
         for arg, value in data.items():
-            if arg.startswith("filter"):
+            if arg == "filter":
+                filters += [cls._parse_filter(v) for v in value]
+            elif arg.startswith("filter["):
                 filters.append(cls._parse_filter(value))
             elif arg.startswith("fields["):
                 groups = FIELDS_REGEXP.match(arg)

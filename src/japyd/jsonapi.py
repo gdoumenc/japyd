@@ -58,8 +58,13 @@ class TopLevel(BaseModel):
     included: list[Resource] | None = None
 
     @classmethod
-    def http_error(
-        cls, code: int | None, title: str, detail: str, status: str | None = None
+    def http_error(cls, e:HTTPException) -> tuple[TopLevel, int, dict]:
+        errors = [Error(id=str(e.code), title=e.name, detail=e.description, status=str(e.code))]
+        return TopLevel(errors=errors), e.code or 500, {"Content-Type": "application/vnd.api+json"}
+
+    @classmethod
+    def error(
+        cls, *, code: int | None = None, title: str, detail: str, status: str | None = None
     ) -> tuple[TopLevel, int, dict]:
         errors = [Error(id=str(code), title=title, detail=detail, status=status or str(code))]
         return TopLevel(errors=errors), code or 500, {"Content-Type": "application/vnd.api+json"}

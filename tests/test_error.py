@@ -30,7 +30,7 @@ def get_exception():
 @app.route("/make_error")
 @validate(exclude_none=True)
 def make_error():
-    return TopLevel.http_error(422, "title", "detail")
+    return TopLevel.error(code=422, title="title", detail="detail")
 
 
 @pytest.fixture()

@@ -20,14 +20,14 @@ It provides a set of utilities to facilitate the creation, manipulation, and val
 
 ### Build JSON:API Relational Structures from Pydantic Models
 
-**Native Pydantic Integration:** Automatically generates JSON:API-compliant resources and relationships from Pydantic models, eliminating boilerplate.
-**Relationship Management:** Supports to-one, to-many, and included resources, fully compliant with the JSON:API specification.
-**Smart Serialization:** Converts Pydantic objects into valid JSON:API documents, handling attributes, relationships, and metadata seamlessly.
+**Native Pydantic Integration:** Automatically generates JSON:API-compliant resources and relationships from Pydantic models, eliminating boilerplate.  
+**Relationship Management:** Supports to-one, to-many, and included resources, fully compliant with the JSON:API specification.  
+**Smart Serialization:** Converts Pydantic objects into valid JSON:API documents, handling attributes, relationships, and metadata seamlessly.  
 
 ### Parse JSON:API Query Parameters (Dotnet-style Syntax)
 
-**Advanced Query Parsing:** Supports JSON:API.NET-style query parameters, including filtering, sorting, pagination, sparse fieldsets, and inclusion.
-**Built-in Validation:** Ensures query parameters are syntactically correct and consistent.
+**Advanced Query Parsing:** Supports JSON:API.NET-style query parameters, including filtering, sorting, pagination, sparse fieldsets, and inclusion.  
+**Built-in Validation:** Ensures query parameters are syntactically correct and consistent.  
 
 - Filtering: filter[name]=Guillaume
 - Sorting: sort=-created,title
@@ -48,9 +48,9 @@ It provides a set of utilities to facilitate the creation, manipulation, and val
 ## Relationship decomposition
 
 To automate and standardize the definition of `relationships` in our JSON:API implementation, we leveraged Pydantic’s
-data model.
+data model.  
 This approach allowed us to dynamically infer relationships between resources without manually declaring them for each
-object type.
+object type.  
 
 The principle is as follows:
 

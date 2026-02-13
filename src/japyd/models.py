@@ -16,7 +16,7 @@ if t.TYPE_CHECKING:
 class JsonApiBaseModel(BaseModel):
     """Base model for JSON:API resources."""
 
-    jsonapi_type: t.ClassVar[str] = Field(frozen=True)
+    jsonapi_type: t.ClassVar[str] = Field(frozen=True, default="jsonapi.type.undefined")
 
     @property
     def jsonapi_id(self) -> str:
@@ -36,7 +36,13 @@ class JsonApiBaseModel(BaseModel):
         self, included: list[Resource], query: JsonApiQueryModel, *, key_prefix: str | None = None
     ) -> Resource:
         jsonapi_id = self.jsonapi_id
-        jsonapi_type = self.jsonapi_type
+        jsonapi_type = (
+            self.jsonapi_type if isinstance(self.jsonapi_type, str) else getattr(self.jsonapi_type, "default", "")
+        )
+        if not isinstance(jsonapi_id, str):
+            raise ValueError("The resource must have a string as id.")
+        if not isinstance(jsonapi_type, str):
+            raise ValueError("The resource must have a string as type.")
         relationships: dict[str, Relationship] = {}
 
         def _add_in_included(value, prefixed_key: str) -> ResourceIdentifier:
@@ -79,7 +85,7 @@ class JsonApiBaseModel(BaseModel):
             id=jsonapi_id, type=jsonapi_type, attributes=attributes, relationships=relationships, links=self.links
         )
 
-    def match(self, oper:Oper, attr: str, value: t.Any) -> bool:
+    def match(self, oper: Oper, attr: str, value: t.Any) -> bool:
         if oper == Oper.EQUALS:
             return getattr(self, attr) == value
         if oper == Oper.LESS_THAN:

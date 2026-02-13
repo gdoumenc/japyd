@@ -1,15 +1,17 @@
+import json
 import typing as t
 from unittest import mock
 
-import pytest
 from flask import Flask
 from flask_pydantic import validate
 
 from japyd import (
     JapydClient,
+    JsonApiApp,
     JsonApiBaseModel,
     JsonApiQueryModel,
     MultiResourcesTopLevel,
+    Resource,
     SingleResourceTopLevel,
 )
 
@@ -21,6 +23,7 @@ class Order(JsonApiBaseModel):
 
 
 app = Flask(__name__)
+JsonApiApp(app)
 
 
 @app.route("/orders")
@@ -38,31 +41,45 @@ def get_order_id(order_id, query: JsonApiQueryModel):
     return query.one_or_none(order)
 
 
-@pytest.fixture()
-def client():
-    return JapydClient("/")
-
-
 def mocked_requests_get(*args, **kwargs):
     with app.test_client() as client:
-        return client.get(*args[1:], query_string=kwargs)
+        value = client.get(*args[1:], **kwargs)
+
+        class Response:
+            def json(self):
+                return json.loads(value.data)
+
+        return Response()
 
 
-@mock.patch("requests.get", side_effect=mocked_requests_get)
-def test_request(client):
-    response = client("get", "/orders")
-    top = MultiResourcesTopLevel.model_validate(response.json)
+@mock.patch("requests.request", side_effect=mocked_requests_get)
+def test_request(request):
+    client = JapydClient("/")
+
+    headers = {"Accept": "application/vnd.api+json"}
+
+    response = client("get", "/orders", headers=headers)
+    top = MultiResourcesTopLevel.model_validate(response)
+    assert isinstance(top.data, list)
     assert len(top.data) == 1
 
-    response = client("get", "/orders", filter="equals(id,'3')")
-    top = MultiResourcesTopLevel.model_validate(response.json)
+    response = client("get", "/orders", query_string={"filter":"equals(id,'3')"})
+    top = MultiResourcesTopLevel.model_validate(response)
+    assert isinstance(top.data, list)
     assert len(top.data) == 1
 
-    response = client("get", "/orders", filter="equals(id,3)")
-    top = MultiResourcesTopLevel.model_validate(response.json)
+    response = client("get", "/orders", query_string={"filter": "equals(id,3)"})
+    top = MultiResourcesTopLevel.model_validate(response)
+    assert isinstance(top.data, list)
     assert len(top.data) == 0
 
-    response = client("get", "/orders/3")
-    top = SingleResourceTopLevel.model_validate(response.json)
+    response = client("get", "/orders", id=3)
+    top = SingleResourceTopLevel.model_validate(response)
+    assert isinstance(top.data, Resource)
     assert top.data is not None
     assert top.data.id == "3"
+
+    res = top.data.flatten()
+    assert isinstance(res, dict)
+    assert res["id"] == "3"
+    assert len(res) == 2

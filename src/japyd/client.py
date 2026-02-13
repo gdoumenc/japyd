@@ -21,5 +21,5 @@ class JapydClient:
             resp = requests.request(method, f"{self.url.rstrip('/')}/{entry.strip('/')}/{id}", **kwargs)
             return SingleResourceTopLevel.model_validate(resp.json())
 
-        resp = requests.request(method, f"{self.url.rstrip('/')}/{entry}/{id}", **kwargs)
+        resp = requests.request(method, f"{self.url.rstrip('/')}/{entry.strip('/')}", **kwargs)
         return MultiResourcesTopLevel.model_validate(resp.json())

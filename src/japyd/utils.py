@@ -20,20 +20,14 @@ def extract_relationship(toplevel, relationship):
     :param toplevel: The toplevel jsonapi structure.
     :param relationship: The relationship to extract or the relationship path to extract.
     """
-    tl = toplevel
-    if isinstance(tl, str):
-        tl = json.loads(tl)
-    if isinstance(tl, dict):
-        tl = TopLevel.model_validate(tl)
-    if not tl.data:
-        raise AttributeError("Wrong toplevel strucure: no data.")
+    tl = _to_toplevel(toplevel)
 
     if isinstance(relationship, str):
         identifiers = get_relation_identifiers(tl, tl.data, relationship)
     elif isinstance(relationship, Relationship):
         identifiers = relationship.data
     else:
-        raise AttributeError("Wrong relationship strucure.")
+        raise AttributeError("Wrong relationship structure.")
 
     if isinstance(identifiers, list):
         # Set in dictionary to avoid duplicate
@@ -58,13 +52,15 @@ def extract_from_resource_identifier(toplevel: TopLevel, identifier: ResourceIde
     :param toplevel: The toplevel jsonapi structure.
     :param identifier: The resource identifier.
     """
+    tl = _to_toplevel(toplevel)
+    ident = _to_identifier(identifier)
 
     # Get all attributes values of the included resources
-    if toplevel.included:
-        for r in toplevel.included:
-            if r.type == identifier.type and r.id == identifier.id:
+    if tl.included:
+        for r in tl.included:
+            if r.type == ident.type and r.id == ident.id:
                 return r
-    raise AttributeError(f"Cannot extract identifier {identifier} from {toplevel}")
+    raise AttributeError(f"Cannot extract identifier {ident} from {tl}")
 
 
 def get_relation_identifiers(toplevel, data, relationship: str) -> ResourceIdentifier | list[ResourceIdentifier]:
@@ -111,3 +107,29 @@ def to_string_or_numeric(value: str) -> str | int | float:
     if value.startswith("'"):
         return value.strip("'")
     return float(value) if "." in value else int(value)
+
+
+def _to_toplevel(toplevel) -> TopLevel:
+    if isinstance(toplevel, TopLevel):
+        tl = toplevel
+    elif isinstance(toplevel, dict):
+        tl = TopLevel.model_validate(toplevel)
+    elif isinstance(toplevel, str):
+        tl = TopLevel.model_validate_json(toplevel)
+    else:
+        raise AttributeError("Wrong toplevel structure: no data.")
+    return tl
+
+
+def _to_identifier(identifier) -> ResourceIdentifier:
+    if isinstance(identifier, ResourceIdentifier):
+        ident = identifier
+    elif isinstance(identifier, Resource):
+        ident = ResourceIdentifier.model_validate(identifier.model_dump())
+    elif isinstance(identifier, dict):
+        ident = ResourceIdentifier.model_validate(identifier)
+    elif isinstance(identifier, str):
+        ident = ResourceIdentifier.model_validate_json(identifier)
+    else:
+        raise AttributeError("Wrong resource identifier structure.")
+    return ident

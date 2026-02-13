@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import typing as t
+
 from flask import Flask, Response, make_response, request
-from pydantic import AnyUrl, BaseModel, Field
+from pydantic import AnyUrl, BaseModel, Field, model_validator
 from werkzeug.exceptions import HTTPException
 
 
@@ -46,7 +48,7 @@ class Resource(BaseModel):
     meta: dict | None = None
 
     def flatten(self):
-        return {"id": self.id, **self.attributes}
+        return {"id": self.id, "type": self.type, **self.attributes}
 
 
 class TopLevel(BaseModel):
@@ -58,7 +60,7 @@ class TopLevel(BaseModel):
     included: list[Resource] | None = None
 
     @classmethod
-    def http_error(cls, e:HTTPException) -> tuple[TopLevel, int, dict]:
+    def http_error(cls, e: HTTPException) -> tuple[TopLevel, int, dict]:
         errors = [Error(id=str(e.code), title=e.name, detail=e.description, status=str(e.code))]
         return TopLevel(errors=errors), e.code or 500, {"Content-Type": "application/vnd.api+json"}
 
@@ -121,11 +123,13 @@ class JsonApiApp:
                         resp = make_response(resp)
                     status_code = str(resp.status_code)
                     title = str(e)
-                    detail = str(resp.data)
+                    detail = resp.data
                 except Exception as ex:
-                    e = ex
+                    status_code = "500"
+                    title = type(e).__name__
+                    detail = f"Error in the application exception handler: {e}"
 
-            if isinstance(e, HTTPException):
+            elif isinstance(e, HTTPException):
                 status_code = str(e.code or 500)
                 title = e.name
                 detail = e.description or str(e)

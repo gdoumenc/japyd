@@ -133,7 +133,7 @@ class JsonApiQueryModel(BaseModel):
         """Returns a no content response."""
         return Response(status=HTTPStatus.NO_CONTENT)
 
-    def one(self, value: JsonApiBaseModel) -> SingleResourceTopLevel:
+    def one(self, value: JsonApiBaseModel | Resource | dict) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
         if value is None:
             raise NotFound()
@@ -142,12 +142,18 @@ class JsonApiQueryModel(BaseModel):
         meta = {
             "count": 1,
         }
-        return SingleResourceTopLevel(data=value.as_resource(included, self), included=included, meta=meta)  # noqa
+        if isinstance(value, JsonApiBaseModel):
+            data = value.as_resource(included, self)
+        elif isinstance(value, Resource):
+            data = value
+        else:
+            data = Resource(id=value.pop("id", ""), type=value.pop("type", ""), attributes=value)
+        return SingleResourceTopLevel(data=data, included=included, meta=meta)
 
-    def one_or_none(self, value: JsonApiBaseModel) -> SingleResourceTopLevel:
+    def one_or_none(self, value: JsonApiBaseModel | dict | None) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
         if value is None:
-            return MultiResourcesTopLevel.empty()
+            return SingleResourceTopLevel.empty()
 
         return self.one(value)
 

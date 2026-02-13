@@ -3,7 +3,7 @@ from flask import Flask
 from flask_pydantic import validate
 from werkzeug.exceptions import UnprocessableEntity
 
-from japyd import JsonApiApp, JsonApiQueryModel, TopLevel
+from japyd import JsonApiApp, TopLevel
 
 app = Flask(__name__)
 JsonApiApp(app)

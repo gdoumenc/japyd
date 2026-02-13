@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import typing as t
-
 from flask import Flask, Response, make_response, request
-from pydantic import AnyUrl, BaseModel, Field, model_validator
+from pydantic import AnyUrl, BaseModel, Field
 from werkzeug.exceptions import HTTPException
 
 
@@ -127,7 +125,7 @@ class JsonApiApp:
                 except Exception as ex:
                     status_code = "500"
                     title = type(e).__name__
-                    detail = f"Error in the application exception handler: {e}"
+                    detail = f"Error in the application exception handler: {ex}"
 
             elif isinstance(e, HTTPException):
                 status_code = str(e.code or 500)

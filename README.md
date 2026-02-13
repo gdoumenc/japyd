@@ -13,7 +13,39 @@ Automate JSON:API relationships with Pydantic. No manual mapping, just clean cod
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/gdoumenc/japyd)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-## Description
+## Japyd: Core Value Propositions
+
+**Japyd** is a Python toolkit designed to simplify the interaction with JSON:API, a specification for building APIs in JSON.
+It provides a set of utilities to facilitate the creation, manipulation, and validation of JSON:API resources and requests.
+
+### Build JSON:API Relational Structures from Pydantic Models
+
+**Native Pydantic Integration:** Automatically generates JSON:API-compliant resources and relationships from Pydantic models, eliminating boilerplate.
+**Relationship Management:** Supports to-one, to-many, and included resources, fully compliant with the JSON:API specification.
+**Smart Serialization:** Converts Pydantic objects into valid JSON:API documents, handling attributes, relationships, and metadata seamlessly.
+
+### Parse JSON:API Query Parameters (Dotnet-style Syntax)
+
+**Advanced Query Parsing:** Supports JSON:API.NET-style query parameters, including filtering, sorting, pagination, sparse fieldsets, and inclusion.
+**Built-in Validation:** Ensures query parameters are syntactically correct and consistent.
+
+- Filtering: filter[name]=Guillaume
+- Sorting: sort=-created,title
+- Pagination: page[number]=1&page[size]=10
+- Sparse Fieldsets: fields[articles]=title,author
+- Inclusion: include=author,comments
+
+### Flask Extension for JSON:API Response Formatting
+
+**Ready-to-use Flask Integration:** Provides a Flask extension to automatically encapsulate responses in JSON:API format, including:
+
+- Resources (data, relationships, attributes)
+- Pagination (links, page metadata)
+- Errors (standardized JSON:API error objects)
+
+**Simplified Endpoints**: Reduces manual response formatting, ensuring compliance with JSON:API standards.
+
+## Relationship decomposition
 
 To automate and standardize the definition of `relationships` in our JSON:API implementation, we leveraged Pydantic’s
 data model.
@@ -28,9 +60,9 @@ The principle is as follows:
 - If the attribute is a primitive type (string, integer, boolean, or event dict etc.), it is treated as a standard
   `attribute`.
 
-## Usage
+### Usage
 
-### Serialization
+#### Serialization
 
 Define your data models in Pydantic, let *japyd* automatically handle serialization—including relationships and included
 resources—and expose a standard-compliant JSON:API with Flask in just a few lines of code.
@@ -93,10 +125,9 @@ You can bypass this behavior by annotationg the field as follow:
     items: Annotated[list[Product], 'as_attribute']  # This field will be now an 'attribute' in JSON:API
 ```
 
-### Filtering
+#### Filtering
 
 The complete filtering syntax of [JsonApiDotNetCore](https://www.jsonapi.net/) is supported
-
 
 ## References
 
@@ -106,7 +137,7 @@ The complete filtering syntax of [JsonApiDotNetCore](https://www.jsonapi.net/) i
 1. Filtering syntax defined in the dotnet implementation [JsonApiDotNetCore](https://www.jsonapi.net/).
 1. Simple relationship extraction and other structure manipulations.
 
-## 🚀 Looking for Contributors!
+## 🚀 Looking for Contributors
 
 We’re actively seeking developers, testers, and open-source enthusiasts to help us build and improve japyd.
 Whether you’re passionate about data validation, API design, or just want to contribute to an innovative open-source

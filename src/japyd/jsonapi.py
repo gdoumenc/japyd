@@ -34,7 +34,7 @@ class ResourceIdentifier(BaseModel):
 
 
 class Relationship(BaseModel):
-    data: ResourceIdentifier | list[ResourceIdentifier] | None = None
+    data: ResourceIdentifier | list[ResourceIdentifier] = Field(default_factory=list)
     links: dict[str, AnyUrl | Link | None] | None = None
     meta: dict | None = None
 
@@ -223,13 +223,10 @@ def extract_relationship(toplevel, relationship) -> list[Resource] | Resource | 
 
     if isinstance(identifiers, list):
         # Set in dictionary to avoid duplicate
-        resources = {}
+        resources: dict[str, Resource] = {}
         for ident in identifiers:
             res = extract_from_resource_identifier(tl, ident)
-            if isinstance(toplevel, str) or isinstance(toplevel, dict):
-                resources[f"{res.type}{res.id}"] = res.model_dump()
-            else:
-                resources[f"{res.type}{res.id}"] = res
+            resources[f"{res.type}{res.id}"] = res
         return list(resources.values())
 
     res = extract_from_resource_identifier(tl, t.cast(ResourceIdentifier, identifiers))

@@ -17,7 +17,6 @@ from .jsonapi import (
     TopLevel,
 )
 from .models import JsonApiBaseModel
-from .utils import to_string_or_numeric
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
 
@@ -68,7 +67,7 @@ class JsonApiQueryFilter(BaseModel):
             if data["oper"] in (Oper.ANY, Oper.HAS):
                 typed_values = []
                 for value in data["value"]:
-                    value = to_string_or_numeric(value)
+                    value = _to_string_or_numeric(value)
                     typed_values.append(value)
                 data["value"] = typed_values
 
@@ -276,3 +275,9 @@ class JsonApiQueryModel(BaseModel):
                 value = value.replace("''", "'")
 
         return value
+
+
+def _to_string_or_numeric(value: str) -> str | int | float:
+    if value.startswith("'"):
+        return value.strip("'")
+    return float(value) if "." in value else int(value)

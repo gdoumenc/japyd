@@ -193,15 +193,20 @@ def extract_relationship(toplevel: dict | str, relationship: str) -> list[dict] 
 
 @t.overload
 def extract_relationship(toplevel: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource:
-    """Extracts from a TopLevel model as a single resource."""
+    """Extracts from a TopLevel model."""
 
 
 @t.overload
-def extract_relationship(toplevel: _JsonApiBodyModel, relationship: Relationship | str) -> list[Resource] | Resource:
+def extract_relationship(toplevel: SingleBodyModel, relationship: Relationship | str) -> Resource:
     """Extracts from a JsonApiBodyModel as a single resource."""
 
 
-def extract_relationship(toplevel, relationship):
+@t.overload
+def extract_relationship(toplevel: MultiBodyModel, relationship: Relationship | str) -> list[Resource]:
+    """Extracts from a JsonApiBodyModel as a multiple resource."""
+
+
+def extract_relationship(toplevel, relationship) -> list[Resource] | Resource | list[dict] | dict:
     """Returns the resource associated with the relationship if defined in included.
 
     :param toplevel: The toplevel jsonapi structure.

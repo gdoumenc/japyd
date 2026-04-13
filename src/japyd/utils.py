@@ -9,15 +9,3 @@ def flatten_resource(res: Resource | dict, *, more: dict | None = None) -> dict:
     if isinstance(res, Resource):
         return {"type": res.type, "id": res.id, **res.attributes, **more}
     return {"type": res["type"], "id": res["id"], **res["attributes"], **more}
-
-
-def to_bool(val: t.Any) -> bool:
-    if isinstance(val, str):
-        return val.lower() in ["true", "1", "yes", "y"]
-    return bool(val)
-
-
-def to_string_or_numeric(value: str) -> str | int | float:
-    if value.startswith("'"):
-        return value.strip("'")
-    return float(value) if "." in value else int(value)

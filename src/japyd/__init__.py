@@ -16,6 +16,7 @@ from .jsonapi import (
     extract_from_resource_identifier,
     extract_relationship,
 )
+from .utils import flatten_resource
 
 __all__ = [
     "TopLevel",
@@ -35,4 +36,5 @@ __all__ = [
     "MultiResourcesTopLevel",
     "extract_relationship",
     "extract_from_resource_identifier",
+    "flatten_resource",
 ]

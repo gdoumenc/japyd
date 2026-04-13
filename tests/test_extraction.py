@@ -1,7 +1,13 @@
 import json
 
-from japyd.jsonapi import Relationship, Resource, ResourceIdentifier, TopLevel
-from japyd.utils import extract_from_resource_identifier, extract_relationship
+from japyd import (
+    Relationship,
+    Resource,
+    ResourceIdentifier,
+    TopLevel,
+    extract_from_resource_identifier,
+    extract_relationship,
+)
 
 
 class TestExtraction:

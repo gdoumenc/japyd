@@ -1,7 +1,11 @@
 import typing as t
 
-from japyd.jsonapi import ResourceIdentifier, TopLevel
-from japyd.utils import extract_from_resource_identifier, extract_relationship
+from japyd import (
+    ResourceIdentifier,
+    TopLevel,
+    extract_from_resource_identifier,
+    extract_relationship,
+)
 
 data = {
     "data": [

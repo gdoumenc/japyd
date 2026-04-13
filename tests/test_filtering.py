@@ -5,12 +5,8 @@ from flask import Flask, request
 from flask_pydantic import validate
 from pydantic import computed_field
 
-from japyd.dotnet import (
-    JsonApiBodyModel,
-    JsonApiQueryModel,
-    Oper,
-    SingleResourceTopLevel,
-)
+from japyd import JsonApiBodyModel, JsonApiQueryModel, SingleResourceTopLevel
+from japyd.dotnet import Oper
 from japyd.models import JsonApiBaseModel
 
 
@@ -235,11 +231,13 @@ class TestReturnedValue:
         example = ExampleBaseModel(**res.json["data"]["attributes"])
         assert example.notice == 15
 
+
 class TestMultiFilter:
 
     def test_multi(self, client):
         res = client.get("/multi?filter=equals(name,'Brian O''Connor')&filter=equals(notice,10)")
         assert res.status_code == 200
+
     # def test_fields(self, client):
     # res = client.get('/example')
     # assert res.status_code == 200

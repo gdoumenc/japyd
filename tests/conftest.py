@@ -65,6 +65,6 @@ def articles():
         },
         "relationships": {"author": {"data": {"type": "people", "id": "2"}}, "comments": {"data": []}},
     }
-    data_list = data
+    data_list = {**data}
     data_list["data"] = [data_list["data"], added]
     return data_list

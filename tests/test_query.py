@@ -1,5 +1,10 @@
-from japyd.dotnet import JsonApiQueryModel
-from japyd.models import JsonApiBaseModel
+from japyd import (
+    JsonApiBaseModel,
+    JsonApiQueryModel,
+    Resource,
+    SingleBodyModel,
+    extract_relationship,
+)
 
 
 class SimpleBaseModel(JsonApiBaseModel):
@@ -63,3 +68,13 @@ class TestQuery:
         assert r.data is None
         assert r.meta is not None
         assert r.meta["count"] == 0
+
+
+class TestBody:
+
+    def test_body(self, article):
+        body = SingleBodyModel.model_validate(article)
+        assert body is not None
+        author = extract_relationship(body, "author")
+        assert isinstance(author, Resource)
+        assert author.attributes["firstName"] == "Dan"

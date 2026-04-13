@@ -276,37 +276,3 @@ class JsonApiQueryModel(BaseModel):
                 value = value.replace("''", "'")
 
         return value
-
-
-class _JsonApiBodyModel(BaseModel):
-    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
-
-    included: list[Resource] | None = Field(default_factory=list)
-    meta: dict | None = None
-    debug: bool = False
-
-
-class JsonApiBodyModel(_JsonApiBodyModel):
-    data: Resource | list[Resource] | None = None
-
-    @property
-    def attributes(self) -> dict[str, t.Any] | list[dict[str, t.Any]]:
-        if isinstance(self.data, list):
-            return [d.attributes for d in self.data]
-        return self.data.attributes if self.data else {}
-
-
-class SingleBodyModel(_JsonApiBodyModel):
-    data: Resource | None = None
-
-    @property
-    def attributes(self) -> dict[str, t.Any]:
-        return self.data.attributes if self.data else {}
-
-
-class MultiBodyModel(_JsonApiBodyModel):
-    data: list[Resource] = Field(default_factory=list)
-
-    @property
-    def attributes(self) -> list[dict[str, t.Any]]:
-        return [d.attributes for d in self.data]

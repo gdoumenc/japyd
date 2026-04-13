@@ -14,7 +14,10 @@ if t.TYPE_CHECKING:
 
 
 class JsonApiBaseModel(BaseModel):
-    """Base model for JSON:API resources."""
+    """Base model for JSON:API resources.
+
+    A resource must have an id and a type. The type is defined as a class variable and the id is defined as a property.
+    """
 
     jsonapi_type: t.ClassVar[str] = Field(frozen=True, default="jsonapi.type.undefined")
 
@@ -35,6 +38,14 @@ class JsonApiBaseModel(BaseModel):
     def as_resource(
         self, included: list[Resource], query: JsonApiQueryModel, *, key_prefix: str | None = None
     ) -> Resource:
+        """Converts the model into a JSON:API resource.
+
+        Args:
+            included: List of included resources for relationships
+            query: Query object containing the filtering parameters
+            key_prefix: Prefix for the relationship keys (used for nested relationships)
+        """
+
         jsonapi_id = self.jsonapi_id
         jsonapi_type = (
             self.jsonapi_type if isinstance(self.jsonapi_type, str) else getattr(self.jsonapi_type, "default", "")

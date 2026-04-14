@@ -38,9 +38,9 @@ class TestExtraction:
         authors = extract_relationship(toplevel, "comments.author")
         assert isinstance(authors, list)
         assert len(authors) == 2
-        peoples = extract_relationship(toplevel, "comments.author.country")
-        assert isinstance(peoples, list)
-        assert len(peoples) == 1
+        country = extract_relationship(toplevel, "comments.author.country")
+        assert isinstance(country, list)
+        assert len(country) == 1
 
     def test_str(self, article):
         toplevel = json.dumps(article)

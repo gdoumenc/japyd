@@ -6,8 +6,7 @@ import typing as t
 from pydantic import AnyUrl, BaseModel, Field
 
 from .filter import Oper
-from .jsonapi import Link, Relationship, Resource, ResourceIdentifier
-from .utils import flatten_resource
+from .jsonapi import Link, Relationship, Resource, ResourceIdentifier, flatten_resource
 
 if t.TYPE_CHECKING:
     from .dotnet import JsonApiQueryModel

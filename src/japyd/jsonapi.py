@@ -187,52 +187,89 @@ class JsonApiApp:
 
 
 @t.overload
-def extract_relationship(toplevel: dict | str, relationship: str) -> list[dict] | dict:
-    """Extracts from dict or a JSON string."""
+def extract_relationship(data: dict | str, relationship: str) -> list[dict] | dict:
+    """Extracts from dict or a JSON string. Relationship string may be composed with '.' to extract nested relationships."""
 
 
 @t.overload
-def extract_relationship(toplevel: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource:
-    """Extracts from a TopLevel model."""
+def extract_relationship(data: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource:
+    """Extracts from a TopLevel model. Relationship string may be composed with '.' to extract nested relationships."""
 
 
 @t.overload
-def extract_relationship(toplevel: SingleBodyModel, relationship: Relationship | str) -> Resource:
-    """Extracts from a JsonApiBodyModel as a single resource."""
+def extract_relationship(data: SingleBodyModel, relationship: Relationship | str) -> Resource:
+    """Extracts from a JsonApiBodyModel as a single resource. Relationship string may be composed with '.' to extract nested relationships."""
 
 
 @t.overload
-def extract_relationship(toplevel: MultiBodyModel, relationship: Relationship | str) -> list[Resource]:
-    """Extracts from a JsonApiBodyModel as a multiple resource."""
+def extract_relationship(data: MultiBodyModel, relationship: Relationship | str) -> list[Resource]:
+    """Extracts from a JsonApiBodyModel as a multiple resource. Relationship string may be composed with '.' to extract nested relationships."""
 
 
-def extract_relationship(toplevel, relationship) -> list[Resource] | Resource | list[dict] | dict:
+def extract_relationship(data, relationship: Relationship | str) -> list[Resource] | Resource | list[dict] | dict:
     """Returns the resource associated with the relationship if defined in included.
 
     :param toplevel: The toplevel jsonapi structure.
     :param relationship: The relationship to extract or the relationship path to extract.
+                         Relationship string may be composed with '.' to extract nested relationships.
     """
-    tl = _to_toplevel(toplevel)
+    if isinstance(data, dict) or isinstance(data, str):
+        _data = _to_toplevel(data)
+    else:
+        _data = data
 
     if isinstance(relationship, str):
-        identifiers = get_relation_identifiers(tl, tl.data, relationship)
+        identifiers = get_relation_identifiers(_data, _data.data, relationship)
     elif isinstance(relationship, Relationship):
         identifiers = relationship.data
     else:
-        raise AttributeError("Wrong relationship structure.")
+        raise AttributeError(f"Wrong relationship structure : {type(relationship)}.")
 
     if isinstance(identifiers, list):
         # Set in dictionary to avoid duplicate
         resources: dict[str, Resource] = {}
         for ident in identifiers:
-            res = extract_from_resource_identifier(tl, ident)
+            res = extract_from_resource_identifier(_data, ident)
             resources[f"{res.type}{res.id}"] = res
         return list(resources.values())
 
-    res = extract_from_resource_identifier(tl, t.cast(ResourceIdentifier, identifiers))
-    if isinstance(toplevel, str) or isinstance(toplevel, dict):
+    res = extract_from_resource_identifier(_data, t.cast(ResourceIdentifier, identifiers))
+    if isinstance(data, dict) or isinstance(data, str):
         return res.model_dump()
     return res
+
+
+def flatten_resource(res: Resource | TopLevel, *, toplevel: TopLevel | None = None, pattern: str | None = None) -> dict:
+    """Returns the resource attributes with the 'id' added. Can add more data if needed."""
+    if isinstance(res, TopLevel):
+        data = res.data
+        if toplevel is None:
+            toplevel = res
+    else:
+        data = res
+
+    if not data:
+        return {}
+
+    if isinstance(data, list):
+        return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data] # pyright: ignore[reportReturnType]
+
+    if not pattern:
+        return {"type": data.type, "id": data.id, **data.attributes}
+
+    if toplevel is None:
+        raise ValueError("flatten_resource: toplevel must be provided if pattern is specified.")
+
+    flatten = flatten_resource(data)
+
+    if "." not in pattern:
+        rel = extract_relationship(toplevel, pattern)
+        flatten[pattern] = flatten_resource(rel) if isinstance(rel, Resource) else [flatten_resource(r) for r in rel]
+        return flatten
+
+    _flatten_resource(toplevel, data, flatten, *pattern.split(".", 1))
+
+    return flatten
 
 
 def extract_from_resource_identifier(toplevel: TopLevel, identifier: ResourceIdentifier) -> Resource:
@@ -266,16 +303,16 @@ def get_relation_identifiers(toplevel, data, relationship: str) -> ResourceIdent
         return data.relationships[relationship].data
 
     # Composed relationships
-    relationship, other, *_ = relationship.split(".", 1)
-    res = extract_relationship(toplevel, relationship)
+    *first, last = relationship.split(".")
+    res = extract_relationship(toplevel, ".".join(first))
     if isinstance(res, list):
         flat_list = []
         for r in res:
-            rel = get_relation_identifiers(toplevel, r, other)
+            rel = get_relation_identifiers(toplevel, r, last)
             flat_list.extend(rel) if isinstance(rel, list) else flat_list.append(rel)
         return flat_list
     else:
-        return get_relation_identifiers(toplevel, res, other)
+        return get_relation_identifiers(toplevel, res, last)
 
 
 def _to_toplevel(toplevel) -> TopLevel:
@@ -288,7 +325,7 @@ def _to_toplevel(toplevel) -> TopLevel:
     elif isinstance(toplevel, str):
         tl = TopLevel.model_validate_json(toplevel)
     else:
-        raise AttributeError("Wrong toplevel structure: no data.")
+        raise AttributeError(f"Wrong toplevel structure: no data available for {type(toplevel)}.")
     return tl
 
 
@@ -302,5 +339,45 @@ def _to_identifier(identifier) -> ResourceIdentifier:
     elif isinstance(identifier, str):
         ident = ResourceIdentifier.model_validate_json(identifier)
     else:
-        raise AttributeError("Wrong resource identifier structure.")
+        raise AttributeError(f"Wrong resource identifier structure : {type(identifier)}.")
     return ident
+
+
+def _flatten_resource(toplevel: TopLevel, current_res, current_flatten, first: str, lasts: str):
+    current_rel = current_res.relationships[first]
+    if isinstance(current_rel.data, list):
+        current_flatten[first] = []
+        for r in current_rel.data:
+            extracted = extract_from_resource_identifier(toplevel, r)
+            frel = flatten_resource(extracted)
+            current_flatten[first].append(frel)
+            if "." in lasts:
+                _flatten_resource(toplevel, extracted, frel, *lasts.split(".", 1))
+            else:
+                _add_flatten_relationship(toplevel, extracted, frel, lasts)
+    else:
+        extracted = extract_from_resource_identifier(toplevel, current_rel.data)
+        frel = flatten_resource(extracted)
+        current_flatten[first] = frel
+        if "." in lasts:
+            _flatten_resource(toplevel, extracted, frel, *lasts.split(".", 1))
+        else:
+            _add_flatten_relationship(toplevel, extracted, frel, lasts)
+
+
+def _add_flatten_relationship(toplevel: TopLevel, res: Resource, flatten: dict, relationship: str):
+    if not res.relationships:
+        raise AttributeError(f"No relationship in resource {res}")
+
+    if "|" in relationship:
+        for key in relationship.split("|"):
+            _add_flatten_relationship(toplevel, res, flatten, key)
+        return
+
+    if relationship not in res.relationships:
+        raise AttributeError(f"Relationship {relationship} not found in resource {res}")
+    rel = res.relationships[relationship]
+    if isinstance(rel.data, list):
+        flatten[relationship] = [flatten_resource(extract_from_resource_identifier(toplevel, r)) for r in rel.data]
+    else:
+        flatten[relationship] = flatten_resource(extract_from_resource_identifier(toplevel, rel.data))

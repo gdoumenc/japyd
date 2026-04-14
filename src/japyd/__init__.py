@@ -15,8 +15,8 @@ from .jsonapi import (
     TopLevel,
     extract_from_resource_identifier,
     extract_relationship,
+    flatten_resource,
 )
-from .utils import flatten_resource
 
 __all__ = [
     "TopLevel",

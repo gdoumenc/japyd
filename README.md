@@ -56,7 +56,7 @@ The principle is as follows:
 
 - A Pydantic model represents a resource (e.g., JSON:API Resource Object).
 - If an attribute of this model is itself a Pydantic object (or a list of Pydantic objects), it is automatically
-- interpreted as a `relationship` in the JSON:API response.
+  interpreted as a `relationship` in the JSON:API response.
 - If the attribute is a primitive type (string, integer, boolean, or event dict etc.), it is treated as a standard
   `attribute`.
 
@@ -123,6 +123,31 @@ You can bypass this behavior by annotationg the field as follow:
 
 ```python
     items: Annotated[list[Product], 'as_attribute']  # This field will be now an 'attribute' in JSON:API
+```
+
+#### Deserialization
+
+Deserialization of JSON:API resource objects into flat dictionaries is handled by the `flatten_resource` function. This function extracts resource attributes along with the `id` and `type` fields, and can optionally flatten nested relationships using a pattern parameter.
+
+```python
+from japyd import TopLevel, flatten_resource, extract_relationship
+
+# Example: flatten a resource with nested relationships
+response = client.get("/orders/3?include=items")
+top = TopLevel.model_validate(response.json)
+
+# Flatten the resource to a dictionary
+flattened = flatten_resource(top.data)
+# Result: {"type": "order", "id": "3", "customer_id": "123", "status": "open"}
+
+# Flatten with nested relationships using pattern
+flattened_with_items = flatten_resource(
+    top.data, 
+    toplevel=top, 
+    pattern="items"
+)
+# Result: {"type": "order", "id": "3", "customer_id": "123", "status": "open", 
+#          "items": [{"type": "product", "id": "1", "price": 100.0}]}
 ```
 
 #### Filtering

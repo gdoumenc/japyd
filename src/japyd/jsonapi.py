@@ -239,7 +239,12 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
     return res
 
 
-def flatten_resource(res: Resource | TopLevel, *, toplevel: TopLevel | None = None, pattern: str | None = None) -> dict:
+def flatten_resource(
+    res: Resource | TopLevel,
+    *,
+    toplevel: TopLevel | SingleBodyModel | MultiBodyModel | None = None,
+    pattern: str | None = None,
+) -> dict:
     """Returns the resource attributes with the 'id' added. Can add more data if needed."""
     if isinstance(res, TopLevel):
         data = res.data
@@ -252,7 +257,7 @@ def flatten_resource(res: Resource | TopLevel, *, toplevel: TopLevel | None = No
         return {}
 
     if isinstance(data, list):
-        return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data] # type: ignore
+        return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data]  # type: ignore
 
     if not pattern:
         return {"type": data.type, "id": data.id, **data.attributes}
@@ -272,7 +277,9 @@ def flatten_resource(res: Resource | TopLevel, *, toplevel: TopLevel | None = No
     return flatten
 
 
-def extract_from_resource_identifier(toplevel: TopLevel, identifier: ResourceIdentifier) -> Resource:
+def extract_from_resource_identifier(
+    toplevel: TopLevel | SingleBodyModel | MultiBodyModel, identifier: ResourceIdentifier
+) -> Resource:
     """Returns the resource associated with the resource identifier if defined in included.
 
     :param toplevel: The toplevel jsonapi structure.
@@ -343,7 +350,9 @@ def _to_identifier(identifier) -> ResourceIdentifier:
     return ident
 
 
-def _flatten_resource(toplevel: TopLevel, current_res, current_flatten, first: str, lasts: str):
+def _flatten_resource(
+    toplevel: TopLevel | SingleBodyModel | MultiBodyModel, current_res, current_flatten, first: str, lasts: str
+):
     current_rel = current_res.relationships[first]
     if isinstance(current_rel.data, list):
         current_flatten[first] = []
@@ -365,7 +374,9 @@ def _flatten_resource(toplevel: TopLevel, current_res, current_flatten, first: s
             _add_flatten_relationship(toplevel, extracted, frel, lasts)
 
 
-def _add_flatten_relationship(toplevel: TopLevel, res: Resource, flatten: dict, relationship: str):
+def _add_flatten_relationship(
+    toplevel: TopLevel | SingleBodyModel | MultiBodyModel, res: Resource, flatten: dict, relationship: str
+):
     if not res.relationships:
         raise AttributeError(f"No relationship in resource {res}")
 

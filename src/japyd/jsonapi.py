@@ -252,7 +252,7 @@ def flatten_resource(res: Resource | TopLevel, *, toplevel: TopLevel | None = No
         return {}
 
     if isinstance(data, list):
-        return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data] # pyright: ignore[reportReturnType]
+        return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data] # type: ignore
 
     if not pattern:
         return {"type": data.type, "id": data.id, **data.attributes}

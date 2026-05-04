@@ -1,11 +1,11 @@
 [project]
 name = "japyd"
-version = "1.1.1"
-description = "Automate JSON:API management in Flask. No manual mapping, just clean code."
+version = "0.1.1"
+description = "Default template for PDM package"
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },
 ]
-requires-python = ">=3.11"
+requires-python = "==3.13.*"
 readme = "README.md"
 license = { text = "MIT" }
 
@@ -27,12 +27,8 @@ dev = [
     "types-requests>=2.31.0.6",
 ]
 
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
 [tool.pdm]
-distribution = true
+distribution = false
 
 [tool.pdm.build]
 excludes = ["tests/"]

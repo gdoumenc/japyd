@@ -1,7 +1,7 @@
 import pytest
 from flask import Flask
 from flask_pydantic import validate
-from werkzeug.exceptions import UnprocessableEntity
+from werkzeug.exceptions import HTTPException, UnprocessableEntity
 
 from japyd import JsonApiApp, TopLevel
 
@@ -74,3 +74,4 @@ def test_error(client):
     assert top.errors
     assert len(top.errors) == 1
     assert top.errors[0].title == "title"
+

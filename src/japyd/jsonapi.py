@@ -158,9 +158,13 @@ class JsonApiApp:
                     status_code = str(resp.status_code)
                     title = str(e)
                     detail = resp.data
+                except HTTPException as ex:
+                    status_code = str(ex.code or 500)
+                    title = ex.name
+                    detail = ex.description or str(ex)
                 except Exception as ex:
                     status_code = "500"
-                    title = type(e).__name__
+                    title = type(ex).__name__
                     detail = f"Error in the application exception handler: {ex}"
 
             elif isinstance(e, HTTPException):
@@ -266,7 +270,7 @@ def flatten_resource(
         raise ValueError("flatten_resource: toplevel must be provided if pattern is specified.")
 
     flatten = flatten_resource(data)
-
+    
     if "." not in pattern:
         rel = extract_relationship(toplevel, pattern)
         flatten[pattern] = flatten_resource(rel) if isinstance(rel, Resource) else [flatten_resource(r) for r in rel]

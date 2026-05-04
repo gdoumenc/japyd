@@ -27,8 +27,12 @@ dev = [
     "types-requests>=2.31.0.6",
 ]
 
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
 [tool.pdm]
-distribution = false
+distribution = true
 
 [tool.pdm.build]
 excludes = ["tests/"]

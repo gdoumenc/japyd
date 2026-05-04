@@ -5,7 +5,7 @@ description = "Automate JSON:API management in Flask. No manual mapping, just cl
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },
 ]
-requires-python = ">=3.11,<=3.13"
+requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
 

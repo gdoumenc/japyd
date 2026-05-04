@@ -1,11 +1,11 @@
 [project]
 name = "japyd"
 version = "1.1.1"
-description = "Automate JSON:API management in Flask. No manual mapping, just clean code."
+description = "Default template for PDM package"
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.11,<=3.13"
 readme = "README.md"
 license = { text = "MIT" }
 

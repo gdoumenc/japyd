@@ -47,14 +47,11 @@ class TestHandler:
         JsonApiApp(app)
 
         response = app.test_client().get("/")
-        assert response.status_code == 500
+        assert response.status_code == 422
         assert "application/vnd.api+json" in response.headers["Content-Type"]
         top = TopLevel.model_validate(response.json)
 
         assert top.errors
         assert len(top.errors) == 1
-        assert top.errors[0].title == "UnprocessableEntity"
-        assert (
-            top.errors[0].detail
-            == "Error in the application exception handler: 422 Unprocessable Entity: exception test"
-        )
+        assert top.errors[0].title == "Unprocessable Entity"
+        assert top.errors[0].detail== "exception test"

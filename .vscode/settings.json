@@ -1,6 +1,7 @@
 {
     "files.exclude": {
         "**/.git": true,
+        "**/.github": true,
         "**/.svn": true,
         "**/.hg": true,
         "**/CVS": true,
@@ -12,6 +13,7 @@
         "**/.pdm*": true,
         "dist": true,
     },
+    "python.testing.pytestPath": "./.venv/bin/pytest",
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "debugpy.debugJustMyCode": false,

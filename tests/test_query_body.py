@@ -1,8 +1,11 @@
 from japyd import (
     JsonApiBaseModel,
     JsonApiQueryModel,
+    MultiBodyModel,
+    MultiResourcesTopLevel,
     Resource,
     SingleBodyModel,
+    SingleResourceTopLevel,
     extract_relationship,
 )
 
@@ -78,3 +81,13 @@ class TestBody:
         author = extract_relationship(body, "author")
         assert isinstance(author, Resource)
         assert author.attributes["firstName"] == "Dan"
+
+    def test_toplevel(self, article, articles):
+        body = SingleBodyModel.model_validate(article)
+        assert body is not None
+        toplevel = body.toplevel
+        assert isinstance(toplevel, SingleResourceTopLevel)
+        body = MultiBodyModel.model_validate(articles)
+        assert body is not None
+        toplevel = body.toplevel
+        assert isinstance(toplevel, MultiResourcesTopLevel)

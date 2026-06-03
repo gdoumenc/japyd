@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing as t
 
 from flask import Flask, Response, make_response, request
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, model_validator
 from werkzeug.exceptions import HTTPException
 
 
@@ -99,6 +99,12 @@ class _JsonApiBodyModel(BaseModel):
     meta: dict | None = None
     debug: bool = False
 
+    @model_validator(mode="before")
+    @classmethod
+    def parse_template(cls, data: dict) -> dict:
+        if "toplevel" in data:
+            data.update(data.pop("toplevel"))
+        return data
 
 class JsonApiBodyModel(_JsonApiBodyModel):
     data: Resource | list[Resource] | None = None
@@ -117,6 +123,10 @@ class SingleBodyModel(_JsonApiBodyModel):
     def attributes(self) -> dict[str, t.Any]:
         return self.data.attributes if self.data else {}
 
+    @property
+    def toplevel(self) -> SingleResourceTopLevel:
+        return SingleResourceTopLevel(**self.model_dump())
+
 
 class MultiBodyModel(_JsonApiBodyModel):
     data: list[Resource] = Field(default_factory=list)
@@ -124,6 +134,10 @@ class MultiBodyModel(_JsonApiBodyModel):
     @property
     def attributes(self) -> list[dict[str, t.Any]]:
         return [d.attributes for d in self.data]
+
+    @property
+    def toplevel(self) -> MultiResourcesTopLevel:
+        return MultiResourcesTopLevel(**self.model_dump())
 
 
 class JsonApiApp:
@@ -270,7 +284,7 @@ def flatten_resource(
         raise ValueError("flatten_resource: toplevel must be provided if pattern is specified.")
 
     flatten = flatten_resource(data)
-    
+
     if "." not in pattern:
         rel = extract_relationship(toplevel, pattern)
         flatten[pattern] = flatten_resource(rel) if isinstance(rel, Resource) else [flatten_resource(r) for r in rel]

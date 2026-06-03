@@ -320,7 +320,7 @@ class TestFlatten:
         assert isinstance(page2, dict)
         assert page2["slug"] == "autre_produit"
 
-        data = flatten_resource(toplevel.data, toplevel=toplevel, pattern="order,tenant,order.lines.product|product_page")
+        data = flatten_resource(toplevel.data, toplevel=toplevel, pattern="order|tenant,order.lines.product|product_page")
         assert data is not None
         assert isinstance(data, dict)
         assert "order" in data

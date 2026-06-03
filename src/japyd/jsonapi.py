@@ -286,8 +286,7 @@ def flatten_resource(
     flatten = flatten_resource(data)
 
     if "." not in pattern:
-        rel = extract_relationship(toplevel, pattern)
-        flatten[pattern] = flatten_resource(rel) if isinstance(rel, Resource) else [flatten_resource(r) for r in rel]
+        _add_flatten_relationship(toplevel, toplevel.data, flatten, pattern)
         return flatten
 
     _flatten_resource(toplevel, data, flatten, *pattern.split(".", 1))

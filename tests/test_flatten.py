@@ -257,6 +257,14 @@ class TestFlatten:
         assert data["order"]["id"] == "916"
         assert data["order"]["created"] == "2026-04-10T09:09:15.567734Z"
 
+        data = flatten_resource(toplevel.data, toplevel=toplevel, pattern="order|tenant")
+        assert data is not None
+        assert isinstance(data, dict)
+        assert "order" in data
+        assert data["order"]["id"] == "916"
+        assert "tenant" in data
+        assert data["tenant"]["id"] == "tenant"
+
         data = flatten_resource(toplevel.data, toplevel=toplevel, pattern="order.frozen_login")
         assert "order" in data
         assert "frozen_login" in data["order"]
@@ -311,3 +319,4 @@ class TestFlatten:
         page2 = line2["product_page"]
         assert isinstance(page2, dict)
         assert page2["slug"] == "autre_produit"
+

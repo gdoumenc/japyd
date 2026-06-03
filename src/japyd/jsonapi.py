@@ -106,6 +106,7 @@ class _JsonApiBodyModel(BaseModel):
             data.update(data.pop("toplevel"))
         return data
 
+
 class JsonApiBodyModel(_JsonApiBodyModel):
     data: Resource | list[Resource] | None = None
 
@@ -257,13 +258,43 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
     return res
 
 
+@t.overload
 def flatten_resource(
-    res: Resource | TopLevel,
+    res: Resource | SingleResourceTopLevel,
     *,
-    toplevel: TopLevel | SingleBodyModel | MultiBodyModel | None = None,
+    toplevel: SingleResourceTopLevel | None = None,
     pattern: str | None = None,
-) -> dict:
-    """Returns the resource attributes with the 'id' added. Can add more data if needed."""
+) -> dict: ...
+
+
+@t.overload
+def flatten_resource(
+    res: list[Resource] | MultiResourcesTopLevel,
+    *,
+    toplevel: MultiResourcesTopLevel | None = None,
+    pattern: str | None = None,
+) -> list[dict]: ...
+
+
+def flatten_resource(
+    res: Resource | SingleResourceTopLevel | list[Resource] | MultiResourcesTopLevel,
+    *,
+    toplevel: SingleResourceTopLevel | MultiResourcesTopLevel | None = None,
+    pattern: str | None = None,
+) -> dict | list[dict]:
+    """Creates a flattened dictionary representation of the resource.
+    The attributes of the resource are merged with the id and type of the resource.
+    The pattern is a comma separated string of relationships to flatten.
+    Relationships can be nested with '.' and at lastend a multiple relationships can be specified with '|'.
+
+    Example: pattern = "order,tenant,order.lines.product|product_page"
+    The final dictionnary will contain :
+        - the attributes of the resource,
+        - the attributes of the 'order' relationship,
+        - the attributes of the 'tenant' relationship,
+        - the attributes of the 'product' relationship of the order.lines relationship
+        - the attributes of the 'product_page' relationship of the order.lines relationship.
+    """
     if isinstance(res, TopLevel):
         data = res.data
         if toplevel is None:
@@ -285,11 +316,11 @@ def flatten_resource(
 
     flatten = flatten_resource(data)
 
-    if "." not in pattern:
-        _add_flatten_relationship(toplevel, data, flatten, pattern)
-        return flatten
-
-    _flatten_resource(toplevel, data, flatten, *pattern.split(".", 1))
+    for p in pattern.split(","):
+        if "." not in p:
+            _add_flatten_relationship(toplevel, data, flatten, p)
+        else:
+            _flatten_resource(toplevel, data, flatten, *p.split(".", 1))
 
     return flatten
 

@@ -116,6 +116,10 @@ class JsonApiBodyModel(_JsonApiBodyModel):
             return [d.attributes for d in self.data]
         return self.data.attributes if self.data else {}
 
+    @property
+    def toplevel(self) -> TopLevel:
+        return TopLevel(**self.model_dump())
+
 
 class SingleBodyModel(_JsonApiBodyModel):
     data: Resource | None = None

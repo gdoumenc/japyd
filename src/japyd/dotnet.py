@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import typing as t
+import warnings
 from http import HTTPStatus
 
 from flask import Response, request
@@ -40,8 +41,8 @@ COMPILED_OR_AND_REGEXP = re.compile(OR_AND_REGEXP)
 
 
 class JsonApiPagination(BaseModel):
-    number: int
-    size: int
+    number: int  = 1
+    size: int = 20
     total: int | None = None
 
 
@@ -82,12 +83,6 @@ class JsonApiQueryFilter(BaseModel):
 JsonApiQueryFilter.model_rebuild()
 
 
-class JsonApiPagination(BaseModel):
-    number: int | None = 1
-    size: int | None = 20
-    total: int | None = None
-
-
 class JsonApiQueryModel(BaseModel):
     """JSON:API query validated model from flask pydantic.
 
@@ -102,7 +97,7 @@ class JsonApiQueryModel(BaseModel):
     filters: list[JsonApiQueryFilter] = Field(default_factory=list)
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
-    pagination: JsonApiPagination | None = Field(default_factory=JsonApiPagination)
+    pagination: JsonApiPagination = Field(default_factory=lambda: JsonApiPagination())
 
     def get_fields(self, jsonapi_type) -> set[str] | None:
         """Returns the list of fields to dump for the given JSON API type."""
@@ -111,15 +106,6 @@ class JsonApiQueryModel(BaseModel):
             if values:
                 return set(values)
         return None
-
-    @property
-    def query_pagination(self) -> JsonApiPagination:
-        page = request.args.get("page[number]")
-        size = request.args.get("page[size]")
-        return JsonApiPagination(
-            number=int(page) if page else 1,
-            size=int(size) if size else 20,
-        )
 
     def match(self, model: JsonApiBaseModel):
         """Checks if the model matches the query filters."""
@@ -204,7 +190,7 @@ class JsonApiQueryModel(BaseModel):
         return JsonApiQueryModel.error(error.code, error.name, error.get_description())  # type: ignore
 
     @model_validator(mode="before")
-    def parse_filter_fields(cls, data: dict) -> dict:
+    def _parse_query_args(cls, data: dict) -> dict:
         filters = []
         fields = {}
         for arg, value in data.items():
@@ -228,6 +214,19 @@ class JsonApiQueryModel(BaseModel):
         if fields:
             data["fields"] = fields
 
+        # Populate pagination from request.args if not provided
+        if "pagination" not in data:
+            try:
+                page = request.args.get("page[number]")
+                size = request.args.get("page[size]")
+                if page or size:
+                    data["pagination"] = {
+                        "number": int(page) if page else 1,
+                        "size": int(size) if size else 20,
+                    }
+            except RuntimeError:
+                pass  # No Flask context
+
         return data
 
     @field_validator("include", mode="before")
@@ -236,6 +235,13 @@ class JsonApiQueryModel(BaseModel):
         if isinstance(include, set):
             return include
         return set(include[0].split(",")) if include else set()
+
+    @property
+    def query_pagination(self) -> JsonApiPagination:
+        warnings.warn(
+            "query_pagination is deprecated, use simply 'query.pagination' instead", DeprecationWarning, stacklevel=2
+        )
+        return self.pagination
 
     @classmethod
     def _parse_filter(cls, filter: str) -> JsonApiQueryFilter:

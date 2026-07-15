@@ -72,6 +72,21 @@ class TestQuery:
         assert r.meta is not None
         assert r.meta["count"] == 0
 
+    def test_pagination(self):
+        query = JsonApiQueryModel()
+        assert query.pagination is not None
+        assert query.pagination.number == 1
+        assert query.pagination.size == 20
+        
+        query = JsonApiQueryModel(pagination={"number":2})
+        assert query.pagination is not None
+        assert query.pagination.number == 2
+        assert query.pagination.size == 20
+        
+        query = JsonApiQueryModel(pagination={"size":50})
+        assert query.pagination is not None
+        assert query.pagination.number == 1
+        assert query.pagination.size == 50
 
 class TestBody:
 

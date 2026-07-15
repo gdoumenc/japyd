@@ -9,13 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from werkzeug.exceptions import NotFound, UnprocessableEntity
 
 from .filter import Oper
-from .jsonapi import (
-    Error,
-    MultiResourcesTopLevel,
-    Resource,
-    SingleResourceTopLevel,
-    TopLevel,
-)
+from .jsonapi import Error, MultiResourcesTopLevel, Resource, SingleResourceTopLevel, TopLevel
 from .models import JsonApiBaseModel
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
@@ -88,6 +82,12 @@ class JsonApiQueryFilter(BaseModel):
 JsonApiQueryFilter.model_rebuild()
 
 
+class JsonApiPagination(BaseModel):
+    number: int | None = 1
+    size: int | None = 20
+    total: int | None = None
+
+
 class JsonApiQueryModel(BaseModel):
     """JSON:API query validated model from flask pydantic.
 
@@ -102,6 +102,7 @@ class JsonApiQueryModel(BaseModel):
     filters: list[JsonApiQueryFilter] = Field(default_factory=list)
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
+    pagination: JsonApiPagination | None = Field(default_factory=JsonApiPagination)
 
     def get_fields(self, jsonapi_type) -> set[str] | None:
         """Returns the list of fields to dump for the given JSON API type."""

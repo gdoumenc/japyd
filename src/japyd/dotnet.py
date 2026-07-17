@@ -7,7 +7,7 @@ from http import HTTPStatus
 
 from flask import Response, request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from werkzeug.exceptions import NotFound, UnprocessableEntity
+from werkzeug.exceptions import InternalServerError, NotFound, UnprocessableEntity
 
 from .filter import Oper
 from .jsonapi import Error, MultiResourcesTopLevel, Resource, SingleResourceTopLevel, TopLevel
@@ -165,8 +165,10 @@ class JsonApiQueryModel(BaseModel):
             has_next = end < len(values)
             total = len(data)
         else:
-            data = values[start:end]
-            has_next = self.pagination.size <= len(values)
+            if self.pagination.size < len(values):
+                raise InternalServerError("The pagination size was not respected.")
+            data = values
+            has_next = self.pagination.size == len(values)
 
         meta: dict[str, t.Any] = {
             "pagination": {
@@ -191,7 +193,7 @@ class JsonApiQueryModel(BaseModel):
     @staticmethod
     def not_found(detail: str | None = None) -> tuple[TopLevel, int]:
         error = NotFound(description=detail)
-        return JsonApiQueryModel.error(error.code, error.name, error.get_description())  # type: ignore
+        return JsonApiQueryModel.error(error.code, error.name, error.get_description())
 
     @model_validator(mode="before")
     def _parse_query_args(cls, data: dict) -> dict:

@@ -1,3 +1,6 @@
+import pytest
+from werkzeug.exceptions import InternalServerError
+
 from japyd import (
     JsonApiBaseModel,
     JsonApiQueryModel,
@@ -96,6 +99,7 @@ class TestQuery:
         assert toplevel.meta["count"] == 20
         assert toplevel.data[0].attributes["test"] == "1"
         assert toplevel.data[-1].attributes["test"] == "20"
+        assert toplevel.meta["pagination"]["page"] == 1
         assert not toplevel.meta["pagination"]["has_prev"]
         assert not toplevel.meta["pagination"]["has_next"]
 
@@ -112,41 +116,46 @@ class TestQuery:
         assert toplevel.meta["count"] == 10
         assert toplevel.data[0].attributes["test"] == "11"
         assert toplevel.data[-1].attributes["test"] == "20"
+        assert toplevel.meta["pagination"]["page"] == 2
         assert toplevel.meta["pagination"]["has_prev"]
         assert not toplevel.meta["pagination"]["has_next"]
 
-        query = JsonApiQueryModel(pagination={"number": 1, "size": 10})
+        query = JsonApiQueryModel(pagination={"number": 1})
         toplevel = query.paginate(values, full_list=False)
         assert "count" not in toplevel.meta
         assert toplevel.data[0].attributes["test"] == "1"
-        assert toplevel.data[-1].attributes["test"] == "10"
+        assert toplevel.data[-1].attributes["test"] == "20"
         assert not toplevel.meta["pagination"]["has_prev"]
         assert toplevel.meta["pagination"]["has_next"]
 
-        query = JsonApiQueryModel(pagination={"number": 2, "size": 10})
+        query = JsonApiQueryModel(pagination={"number": 2})
         toplevel = query.paginate(values, full_list=False)
         assert "count" not in toplevel.meta
-        assert toplevel.data[0].attributes["test"] == "11"
+        assert toplevel.data[0].attributes["test"] == "1"
         assert toplevel.data[-1].attributes["test"] == "20"
+        assert toplevel.meta["pagination"]["page"] == 2
         assert toplevel.meta["pagination"]["has_prev"]
         assert toplevel.meta["pagination"]["has_next"]
 
         values = [SimpleBaseModel(test=str(i)) for i in range(1, 11)]
 
         query = JsonApiQueryModel()
-        toplevel = query.paginate(values)
-        assert toplevel.meta["count"] == 10
+        toplevel = query.paginate(values, full_list=False)
         assert toplevel.data[0].attributes["test"] == "1"
         assert toplevel.data[-1].attributes["test"] == "10"
         assert not toplevel.meta["pagination"]["has_prev"]
         assert not toplevel.meta["pagination"]["has_next"]
 
+        query = JsonApiQueryModel(pagination={"number": 2})
         toplevel = query.paginate(values, full_list=False)
-        assert "count" not in toplevel.meta
         assert toplevel.data[0].attributes["test"] == "1"
         assert toplevel.data[-1].attributes["test"] == "10"
-        assert not toplevel.meta["pagination"]["has_prev"]
+        assert toplevel.meta["pagination"]["has_prev"]
         assert not toplevel.meta["pagination"]["has_next"]
+
+        query = JsonApiQueryModel(pagination={"size": 5})
+        with pytest.raises(InternalServerError):
+            query.paginate(values, full_list=False)
 
 
 class TestBody:

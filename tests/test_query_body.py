@@ -77,16 +77,77 @@ class TestQuery:
         assert query.pagination is not None
         assert query.pagination.number == 1
         assert query.pagination.size == 20
-        
-        query = JsonApiQueryModel(pagination={"number":2})
+
+        query = JsonApiQueryModel(pagination={"number": 2})
         assert query.pagination is not None
         assert query.pagination.number == 2
         assert query.pagination.size == 20
-        
-        query = JsonApiQueryModel(pagination={"size":50})
+
+        query = JsonApiQueryModel(pagination={"size": 50})
         assert query.pagination is not None
         assert query.pagination.number == 1
         assert query.pagination.size == 50
+
+    def test_paginate(self):
+        values = [SimpleBaseModel(test=str(i)) for i in range(1, 21)]
+
+        query = JsonApiQueryModel()
+        toplevel = query.paginate(values)
+        assert toplevel.meta["count"] == 20
+        assert toplevel.data[0].attributes["test"] == "1"
+        assert toplevel.data[-1].attributes["test"] == "20"
+        assert not toplevel.meta["pagination"]["has_prev"]
+        assert not toplevel.meta["pagination"]["has_next"]
+
+        query = JsonApiQueryModel(pagination={"size": 10})
+        toplevel = query.paginate(values)
+        assert toplevel.meta["count"] == 10
+        assert toplevel.data[0].attributes["test"] == "1"
+        assert toplevel.data[-1].attributes["test"] == "10"
+        assert not toplevel.meta["pagination"]["has_prev"]
+        assert toplevel.meta["pagination"]["has_next"]
+
+        query = JsonApiQueryModel(pagination={"number": 2, "size": 10})
+        toplevel = query.paginate(values)
+        assert toplevel.meta["count"] == 10
+        assert toplevel.data[0].attributes["test"] == "11"
+        assert toplevel.data[-1].attributes["test"] == "20"
+        assert toplevel.meta["pagination"]["has_prev"]
+        assert not toplevel.meta["pagination"]["has_next"]
+
+        query = JsonApiQueryModel(pagination={"number": 1, "size": 10})
+        toplevel = query.paginate(values, full_list=False)
+        assert "count" not in toplevel.meta
+        assert toplevel.data[0].attributes["test"] == "1"
+        assert toplevel.data[-1].attributes["test"] == "10"
+        assert not toplevel.meta["pagination"]["has_prev"]
+        assert toplevel.meta["pagination"]["has_next"]
+
+        query = JsonApiQueryModel(pagination={"number": 2, "size": 10})
+        toplevel = query.paginate(values, full_list=False)
+        assert "count" not in toplevel.meta
+        assert toplevel.data[0].attributes["test"] == "11"
+        assert toplevel.data[-1].attributes["test"] == "20"
+        assert toplevel.meta["pagination"]["has_prev"]
+        assert toplevel.meta["pagination"]["has_next"]
+
+        values = [SimpleBaseModel(test=str(i)) for i in range(1, 11)]
+
+        query = JsonApiQueryModel()
+        toplevel = query.paginate(values)
+        assert toplevel.meta["count"] == 10
+        assert toplevel.data[0].attributes["test"] == "1"
+        assert toplevel.data[-1].attributes["test"] == "10"
+        assert not toplevel.meta["pagination"]["has_prev"]
+        assert not toplevel.meta["pagination"]["has_next"]
+
+        toplevel = query.paginate(values, full_list=False)
+        assert "count" not in toplevel.meta
+        assert toplevel.data[0].attributes["test"] == "1"
+        assert toplevel.data[-1].attributes["test"] == "10"
+        assert not toplevel.meta["pagination"]["has_prev"]
+        assert not toplevel.meta["pagination"]["has_next"]
+
 
 class TestBody:
 

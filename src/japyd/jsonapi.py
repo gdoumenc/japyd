@@ -54,7 +54,7 @@ class Resource(BaseModel):
 class TopLevel(BaseModel):
     data: Resource | list[Resource] | None = None
     errors: list[Error] | None = None
-    meta: dict | None = None
+    meta: dict[str, t.Any] | None = None
     jsonapi: JsonApi | None = None
     links: dict[str, AnyUrl | Link | None] | None = None
     included: list[Resource] | None = None

@@ -41,7 +41,7 @@ COMPILED_OR_AND_REGEXP = re.compile(OR_AND_REGEXP)
 
 
 class JsonApiPagination(BaseModel):
-    number: int  = 1
+    number: int = 1
     size: int = 20
     total: int | None = None
 
@@ -144,7 +144,12 @@ class JsonApiQueryModel(BaseModel):
         return self.one(value)
 
     def paginate(
-        self, values: t.Sequence[Resource | JsonApiBaseModel], *, full_list: bool = True, total: int | None = None
+        self,
+        values: t.Sequence[Resource | JsonApiBaseModel],
+        *,
+        full_list: bool = True,
+        has_next: bool = True,
+        total: int | None = None,
     ) -> MultiResourcesTopLevel:
         """Returns multi JSON:API toplevel's data from a value iterable.
 
@@ -153,28 +158,27 @@ class JsonApiQueryModel(BaseModel):
         :param total: The pagination total number of records if not a full list.
         """
         included: list[Resource] = []
-        pagination = self.query_pagination
-        total = len(values) if full_list else total
+        start = (self.pagination.number - 1) * self.pagination.size
+        end = start + self.pagination.size
         if full_list:
-            start = (pagination.number - 1) * pagination.size
-            end = start + pagination.size
-            values = values[start:end]
+            data = values[start:end]
             has_next = end < len(values)
+            total = len(data)
         else:
-            values = values
-            has_next = "tobedone"  # type: ignore
+            data = values[start:end]
+            has_next = self.pagination.size <= len(values)
 
-        meta = {
-            "count": total,
+        meta: dict[str, t.Any] = {
             "pagination": {
-                "page": pagination.number,
-                "per_page": pagination.size,
-                # "pages": page.pages,
+                "page": self.pagination.number,
+                "per_page": self.pagination.size,
                 "has_next": has_next,
-                "has_prev": pagination.number > 1,
+                "has_prev": self.pagination.number > 1,
             },
         }
-        resources: list[Resource] = [v if isinstance(v, Resource) else v.as_resource(included, self) for v in values]
+        if total is not None:
+            meta["count"] = total
+        resources: list[Resource] = [d if isinstance(d, Resource) else d.as_resource(included, self) for d in data]
         return MultiResourcesTopLevel.model_validate({"data": resources, "included": included, "meta": meta})
 
     @staticmethod

@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from werkzeug.exceptions import InternalServerError, NotFound, UnprocessableEntity
 
 from .filter import Oper
-from .jsonapi import Error, MultiResourcesTopLevel, Resource, SingleResourceTopLevel, TopLevel
+from .jsonapi import Error, MultiResourcesTopLevel, Resource, SingleResourceTopLevel, TopLevel, flatten_resource
 from .models import JsonApiBaseModel
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
@@ -98,6 +98,7 @@ class JsonApiQueryModel(BaseModel):
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
     pagination: JsonApiPagination = Field(default_factory=lambda: JsonApiPagination())
+    flatten: str | None = None
 
     def get_fields(self, jsonapi_type) -> set[str] | None:
         """Returns the list of fields to dump for the given JSON API type."""
@@ -134,7 +135,14 @@ class JsonApiQueryModel(BaseModel):
             data = value
         else:
             data = Resource(id=value.pop("id", ""), type=value.pop("type", ""), attributes=value)
-        return SingleResourceTopLevel(data=data, included=included, meta=meta)
+        res = SingleResourceTopLevel(data=data, included=included, meta=meta)
+
+        if self.flatten:
+            flat_dict = flatten_resource(data, toplevel=res, pattern=self.flatten)
+            flat_res = Resource(type=flat_dict.pop("type"), id=flat_dict.pop("id"), attributes=flat_dict)
+            return SingleResourceTopLevel(data=flat_res, included=included, meta=meta)
+
+        return res
 
     def one_or_none(self, value: JsonApiBaseModel | dict | None) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
@@ -180,8 +188,15 @@ class JsonApiQueryModel(BaseModel):
         }
         if total is not None:
             meta["count"] = total
+
         resources: list[Resource] = [d if isinstance(d, Resource) else d.as_resource(included, self) for d in data]
-        return MultiResourcesTopLevel.model_validate({"data": resources, "included": included, "meta": meta})
+        res = MultiResourcesTopLevel(data=resources, included=included, meta=meta)
+        if self.flatten:
+            flat_list = flatten_resource(resources, toplevel=res, pattern=self.flatten)
+            flat_res = [Resource(type=d.pop("type"), id=d.pop("id"), attributes=d) for d in flat_list]
+            return MultiResourcesTopLevel(data=flat_res, included=included, meta=meta)
+
+        return res
 
     @staticmethod
     def error(code: int, title: str, detail: str) -> tuple[TopLevel, int]:

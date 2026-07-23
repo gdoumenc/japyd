@@ -14,14 +14,14 @@ from japyd import (
 
 
 class SimpleBaseModel(JsonApiBaseModel):
-    test: str
+    test: str = "test"
 
 
 class ContentObject(JsonApiBaseModel):
     jsonapi_type = "content"
     id: str
 
-    class SameObject(JsonApiBaseModel):
+    class SameObject(SimpleBaseModel):
         id: str
         jsonapi_type = "same"
 
@@ -156,6 +156,59 @@ class TestQuery:
         query = JsonApiQueryModel(pagination={"size": 5})
         with pytest.raises(InternalServerError):
             query.paginate(values, full_list=False)
+
+    def test_flatten(self):
+        
+        query = JsonApiQueryModel()
+        r = query.one_or_none(None)
+        assert r.data is None
+        assert r.meta is not None
+        assert r.meta["count"] == 0
+
+        same1 = ContentObject.SameObject(id="same1", test="test1")
+        same2 = ContentObject.SameObject(id="same2", test="test2")
+        content = ContentObject(id="object1", same1=same1, same2=same2)
+
+        query = JsonApiQueryModel()
+        r = query.one(content)
+        assert r.data is not None
+        assert r.meta is not None
+        assert r.meta["count"] == 1
+        assert len(r.data.attributes.keys()) == 0
+
+        query = JsonApiQueryModel(include=["same1"], flatten="same1")
+        r = query.one(content)
+        assert r.data is not None
+        assert r.meta is not None
+        assert r.meta["count"] == 1
+        assert len(r.data.attributes) == 1
+        assert "same1" in r.data.attributes
+
+        query = JsonApiQueryModel(include=["same1, same2"], flatten="same1")
+        r = query.one(content)
+        assert r.data is not None
+        assert r.meta is not None
+        assert r.meta["count"] == 1
+        assert len(r.data.attributes) == 1
+        assert "same1" in r.data.attributes
+
+        query = JsonApiQueryModel(include=["same1, same2"], flatten="same1,same2")
+        r = query.one(content)
+        assert r.data is not None
+        assert r.meta is not None
+        assert r.meta["count"] == 1
+        assert len(r.data.attributes) == 2
+        assert "same1" in r.data.attributes
+        assert "same2" in r.data.attributes
+
+        query = JsonApiQueryModel(include=["same1, same2"], flatten="same1,same2")
+        r = query.paginate([content])
+        assert r.data is not None
+        assert r.meta is not None
+        assert r.meta["count"] == 1
+        assert len(r.data[0].attributes) == 2
+        assert "same1" in r.data[0].attributes
+        assert "same2" in r.data[0].attributes
 
 
 class TestBody:

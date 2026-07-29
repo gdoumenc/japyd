@@ -3,7 +3,7 @@ from __future__ import annotations
 import types
 import typing as t
 
-from pydantic import AnyUrl, BaseModel, Field
+from pydantic import AnyUrl, BaseModel
 
 from .filter import Oper
 from .jsonapi import Link, Relationship, Resource, ResourceIdentifier, flatten_resource
@@ -18,7 +18,7 @@ class JsonApiBaseModel(BaseModel):
     A resource must have an id and a type. The type is defined as a class variable and the id is defined as a property.
     """
 
-    jsonapi_type: t.ClassVar[str] = Field(frozen=True, default="jsonapi.type.undefined")
+    jsonapi_type: t.ClassVar[str] = "jsonapi.type.undefined"
 
     @property
     def jsonapi_id(self) -> str:

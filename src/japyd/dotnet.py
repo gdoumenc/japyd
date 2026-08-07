@@ -162,7 +162,6 @@ class JsonApiQueryModel(BaseModel):
         values: t.Sequence[Resource | JsonApiBaseModel],
         *,
         full_list: bool = True,
-        has_next: bool = True,
         total: int | None = None,
     ) -> MultiResourcesTopLevel:
         """Returns multi JSON:API toplevel's data from a value iterable.
@@ -182,7 +181,10 @@ class JsonApiQueryModel(BaseModel):
             if self.pagination.size < len(values):
                 raise InternalServerError("The pagination size was not respected.")
             data = values
-            has_next = self.pagination.size == len(values)
+            if total is not None:
+                has_next = total > self.pagination.size * self.pagination.number
+            else:
+                has_next = self.pagination.size == len(values)
 
         meta: dict[str, t.Any] = {
             "pagination": {

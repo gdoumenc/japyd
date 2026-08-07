@@ -50,9 +50,9 @@ class JsonApiBaseModel(BaseModel):
             self.jsonapi_type if isinstance(self.jsonapi_type, str) else getattr(self.jsonapi_type, "default", "")
         )
         if not isinstance(jsonapi_id, str):
-            raise ValueError("The resource must have a string as id.")
+            raise TypeError("The resource must have a string as id.")
         if not isinstance(jsonapi_type, str):
-            raise ValueError("The resource must have a string as type.")
+            raise TypeError("The resource must have a string as type.")
         relationships: dict[str, Relationship] = {}
 
         def _add_in_included(value, prefixed_key: str) -> ResourceIdentifier:
@@ -86,7 +86,7 @@ class JsonApiBaseModel(BaseModel):
                     data = [_add_in_included(v, prefixed_key) for v in value]
                 else:
                     data = _add_in_included(value, prefixed_key)
-                relationships[key] = Relationship(data=data)  # noqa
+                relationships[key] = Relationship(data=data)
                 excluded_attributes.add(key)
 
         # Creates resource with attributes and relationships
@@ -125,7 +125,7 @@ T = t.TypeVar("T", bound="BaseModel")
 UnionType = getattr(types, "UnionType", t.Union)
 
 
-def issubtype(type_: t.Type, of_class: t.Generic[T]) -> T | None:  # type: ignore[valid-type]
+def issubtype(type_: type, of_class: t.Generic[T]) -> T | None:  # type: ignore[valid-type]
     """Returns the subtype of a generic type if it is a subtype of the given class."""
     try:
         if issubclass(type(type_), types.GenericAlias) or issubclass(type_, t.Generic):  # type: ignore[arg-type]

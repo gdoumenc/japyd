@@ -10,7 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from werkzeug.exceptions import InternalServerError, NotFound, UnprocessableEntity
 
 from .filter import Oper
-from .jsonapi import Error, MultiResourcesTopLevel, Resource, SingleResourceTopLevel, TopLevel, flatten_resource
+from .jsonapi import (
+    Error,
+    MultiResourcesTopLevel,
+    Resource,
+    SingleResourceTopLevel,
+    TopLevel,
+    flatten_resource,
+)
 from .models import JsonApiBaseModel
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
@@ -58,13 +65,12 @@ class JsonApiQueryFilter(BaseModel):
     @model_validator(mode="before")
     def parse_value(cls, data: dict) -> dict:
         # On subfilter validation does nothing
-        if isinstance(data, dict):
-            if data["oper"] in (Oper.ANY, Oper.HAS):
-                typed_values = []
-                for value in data["value"]:
-                    value = _to_string_or_numeric(value)
-                    typed_values.append(value)
-                data["value"] = typed_values
+        if isinstance(data, dict) and data["oper"] in (Oper.ANY, Oper.HAS):
+            typed_values = []
+            for value in data["value"]:
+                value = _to_string_or_numeric(value)
+                typed_values.append(value)
+            data["value"] = typed_values
 
         return data
 
@@ -222,6 +228,13 @@ class JsonApiQueryModel(BaseModel):
                     filters += [cls._parse_filter(v) for v in value]
             elif arg.startswith("filter["):
                 filters.append(cls._parse_filter(value))
+
+            elif arg == "fields":
+                if isinstance(value, dict):
+                    fields.update(value)
+                else:
+                    msg = f"Wrong fields parameters: must be defined as fields[<type>]=<field1>,<field2>,...{arg}"
+                    raise UnprocessableEntity(msg)
             elif arg.startswith("fields["):
                 groups = FIELDS_REGEXP.match(arg)
                 if groups:

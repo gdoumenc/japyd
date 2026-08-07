@@ -181,7 +181,7 @@ class JsonApiApp:
                     status_code = str(ex.code or 500)
                     title = ex.name
                     detail = ex.description or str(ex)
-                except Exception as ex:
+                except (TypeError, AttributeError, ValueError) as ex:
                     status_code = "500"
                     title = type(ex).__name__
                     detail = f"Error in the application exception handler: {ex}"
@@ -236,7 +236,7 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
     :param relationship: The relationship to extract or the relationship path to extract.
                          Relationship string may be composed with '.' to extract nested relationships.
     """
-    if isinstance(data, dict) or isinstance(data, str):
+    if isinstance(data, (dict, str)):
         _data = _to_toplevel(data)
     else:
         _data = data
@@ -246,7 +246,7 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
     elif isinstance(relationship, Relationship):
         identifiers = relationship.data
     else:
-        raise AttributeError(f"Wrong relationship structure : {type(relationship)}.")
+        raise TypeError(f"Wrong relationship structure : {type(relationship)}.")
 
     if isinstance(identifiers, list):
         # Set in dictionary to avoid duplicate
@@ -257,7 +257,7 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
         return list(resources.values())
 
     res = extract_from_resource_identifier(_data, t.cast(ResourceIdentifier, identifiers))
-    if isinstance(data, dict) or isinstance(data, str):
+    if isinstance(data, (dict, str)):
         return res.model_dump()
     return res
 
@@ -384,7 +384,7 @@ def _to_toplevel(toplevel) -> TopLevel:
     elif isinstance(toplevel, str):
         tl = TopLevel.model_validate_json(toplevel)
     else:
-        raise AttributeError(f"Wrong toplevel structure: no data available for {type(toplevel)}.")
+        raise TypeError(f"Wrong toplevel structure: no data available for {type(toplevel)}.")
     return tl
 
 
@@ -398,7 +398,7 @@ def _to_identifier(identifier) -> ResourceIdentifier:
     elif isinstance(identifier, str):
         ident = ResourceIdentifier.model_validate_json(identifier)
     else:
-        raise AttributeError(f"Wrong resource identifier structure : {type(identifier)}.")
+        raise TypeError(f"Wrong resource identifier structure : {type(identifier)}.")
     return ident
 
 

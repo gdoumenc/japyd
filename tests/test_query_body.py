@@ -158,7 +158,7 @@ class TestQuery:
             query.paginate(values, full_list=False)
 
     def test_flatten(self):
-        
+
         query = JsonApiQueryModel()
         r = query.one_or_none(None)
         assert r.data is None
@@ -220,6 +220,9 @@ class TestBody:
         assert isinstance(author, Resource)
         assert author.attributes["firstName"] == "Dan"
 
+        assert len(body.included) == 5
+        assert body.included[0].attributes["firstName"] == "Alice"
+
     def test_toplevel(self, article, articles):
         body = SingleBodyModel.model_validate(article)
         assert body is not None
@@ -229,3 +232,6 @@ class TestBody:
         assert body is not None
         toplevel = body.toplevel
         assert isinstance(toplevel, MultiResourcesTopLevel)
+        
+        assert len(body.included) == 5
+        assert body.included[0].attributes["firstName"] == "Alice"

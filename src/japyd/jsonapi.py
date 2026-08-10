@@ -109,6 +109,7 @@ class _JsonApiBodyModel(BaseModel):
 
 class JsonApiBodyModel(_JsonApiBodyModel):
     data: Resource | list[Resource] | None = None
+    included: list[Resource] | None = Field(default_factory=list)
 
     @property
     def attributes(self) -> dict[str, t.Any] | list[dict[str, t.Any]]:

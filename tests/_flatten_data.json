@@ -1,0 +1,226 @@
+{
+    "included": [
+        {
+            "type": "billing.invoice.odoo_config",
+            "id": "22_2020-12-08 15:59:29",
+            "attributes": {
+                "start_date": "2020-12-08T15:59:29"
+            },
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "auth.tenant.tenant",
+            "id": "tenant",
+            "attributes": {
+                "ref": "tenant",
+                "name": "tenant",
+                "host": "tenant"
+            },
+            "relationships": {
+                "old_plans": {"data": [], "links": null, "meta": null}
+            },
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.user.login",
+            "id": "1058",
+            "attributes": {
+                "created": "2026-04-10T09:09:15.430478Z",
+                "modified": "2026-04-10T09:09:15.430478Z",
+                "email": "test@test.fr"
+            },
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.user.billing",
+            "id": "1068",
+            "attributes": {
+                "created": "2026-04-10T09:09:15.430366Z",
+                "modified": "2026-04-10T09:09:15.430366Z",
+                "email": "test@test.fr"
+            },
+            "relationships": {
+                "login": {"data": {"type": "eshop.user.login", "id": "1058"}, "links": null, "meta": null}
+            },
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.user.shipping_address",
+            "id": "1937",
+            "attributes": {
+                "designation": "Livraison"
+            },
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.catalog.product",
+            "id": "3970",
+            "attributes": {"reference": "Produit livré", "product_type": null},
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.catalog.product_page",
+            "id": "3963",
+            "attributes": {
+                "slug": "mon_produit",
+                "product": "PRODUIT123"
+            },
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.order.line",
+            "id": "3817",
+            "attributes": {
+                "quantity": 1
+            },
+            "relationships": {
+                "billing_addr": {
+                    "data": {"type": "eshop.user.billing_address", "id": "1936", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "shipping_addr": {
+                    "data": {"type": "eshop.user.shipping_address", "id": "1937", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "product": {
+                    "data": {"type": "eshop.catalog.product", "id": "3970", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "product_page": {
+                    "data": {"type": "eshop.catalog.product_page", "id": "3963", "meta": null},
+                    "links": null,
+                    "meta": null
+                }
+            },
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.catalog.product",
+            "id": "3969",
+            "attributes": {"reference": "PRODUIT123", "product_type": null},
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.catalog.product_page",
+            "id": "3962",
+            "attributes": {
+                "slug": "autre_produit",
+                "product": null
+            },
+            "relationships": {},
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.order.line",
+            "id": "3816",
+            "attributes": {
+                "quantity": 6
+            },
+            "relationships": {
+                "billing_addr": {
+                    "data": {"type": "eshop.user.billing_address", "id": "1936", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "shipping_addr": {
+                    "data": {"type": "eshop.user.shipping_address", "id": "1937", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "product": {
+                    "data": {"type": "eshop.catalog.product", "id": "3969", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "product_page": {
+                    "data": {"type": "eshop.catalog.product_page", "id": "3962", "meta": null},
+                    "links": null,
+                    "meta": null
+                }
+            },
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.order.order",
+            "id": "916",
+            "attributes": {
+                "created": "2026-04-10T09:09:15.567734Z"
+            },
+            "relationships": {
+                "frozen_login": {
+                    "data": {"type": "eshop.user.login", "id": "1058", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "frozen_billing": {
+                    "data": {"type": "eshop.user.billing", "id": "1068", "meta": null},
+                    "links": null,
+                    "meta": null
+                },
+                "lines": {
+                    "data": [
+                        {"type": "eshop.order.line", "id": "3817", "meta": null},
+                        {"type": "eshop.order.line", "id": "3816", "meta": null}
+                    ],
+                    "links": null,
+                    "meta": null
+                }
+            },
+            "links": null,
+            "meta": null
+        },
+        {
+            "type": "eshop.user.billing_address",
+            "id": "1936",
+            "attributes": {
+                "designation": "Facturation"
+            },
+            "relationships": {"billing_user": {"data": {"type": "eshop.user.billing", "id": "1068"}, "meta": null}},
+            "links": null,
+            "meta": null
+        }
+    ],
+    "meta": {"count": 1},
+    "data": {
+        "type": "eshop.order.billing_element",
+        "id": "ID",
+        "attributes": {
+            "supplier": "supplier"
+        },
+        "relationships": {
+            "tenant": {
+                "data": {"type": "auth.tenant.tenant", "id": "tenant", "meta": null},
+                "links": null,
+                "meta": null
+            },
+            "order": {"data": {"type": "eshop.order.order", "id": "916", "meta": null}, "links": null, "meta": null},
+            "billing_addr": {
+                "data": {"type": "eshop.user.billing_address", "id": "1936", "meta": null},
+                "links": null,
+                "meta": null
+            }
+        },
+        "links": null,
+        "meta": null
+    }
+}

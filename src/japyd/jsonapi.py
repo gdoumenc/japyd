@@ -93,6 +93,7 @@ class MultiResourcesTopLevel(TopLevel):
 
 
 class _JsonApiBodyModel(BaseModel):
+    data: Resource | list[Resource] | None = None
     model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
 
     included: list[Resource] | None = Field(default_factory=list)
@@ -108,7 +109,6 @@ class _JsonApiBodyModel(BaseModel):
 
 
 class JsonApiBodyModel(_JsonApiBodyModel):
-    data: Resource | list[Resource] | None = None
     included: list[Resource] | None = Field(default_factory=list)
 
     @property

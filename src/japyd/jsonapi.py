@@ -379,7 +379,7 @@ def _to_toplevel(toplevel) -> TopLevel:
     if isinstance(toplevel, TopLevel):
         tl = toplevel
     elif isinstance(toplevel, _JsonApiBodyModel):
-        tl = TopLevel.model_validate(toplevel.model_dump())
+        tl = TopLevel(data=toplevel.data, included=toplevel.included, meta=toplevel.meta)
     elif isinstance(toplevel, dict):
         tl = TopLevel.model_validate(toplevel)
     elif isinstance(toplevel, str):

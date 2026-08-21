@@ -29,7 +29,8 @@ VALUE_REGEXP = rf"(?P<value>'([^']|'')*')|(?P<numeric>{NUMERIC_REGEXP})|(?P<othe
 OPER_REGEXP = (
     rf"({Oper.EQUALS}|{Oper.LESS_THAN}"
     rf"|{Oper.LESS_OR_EQUAL}|{Oper.GREATER_THAN}|{Oper.GREATER_OR_EQUAL}"
-    rf"|{Oper.CONTAINS}|{Oper.STARTS_WITH}|{Oper.ENDS_WITH})"
+    rf"|{Oper.CONTAINS}|{Oper.STARTS_WITH}|{Oper.ENDS_WITH}"
+    rf"|{Oper.CONTAINS_IGNORE_CASE}|{Oper.START_WITH_IGNORE_CASE}|{Oper.ENDS_WITH_IGNORE_CASE})"
 )
 LIST_OPER_REGEXP = rf"({Oper.ANY}|{Oper.HAS})"
 LIST_VALUES_REGEXP = rf"(('([^']|'')*')|{NUMERIC_REGEXP})"
@@ -81,6 +82,12 @@ class JsonApiQueryFilter(BaseModel):
             Oper.LESS_OR_EQUAL,
             Oper.GREATER_THAN,
             Oper.GREATER_OR_EQUAL,
+            Oper.CONTAINS,
+            Oper.STARTS_WITH,
+            Oper.ENDS_WITH,
+            Oper.CONTAINS_IGNORE_CASE,
+            Oper.START_WITH_IGNORE_CASE,
+            Oper.ENDS_WITH_IGNORE_CASE,
         ):
             return model.match(self.oper, self.attr, self.value)
         return False

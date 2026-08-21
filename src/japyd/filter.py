@@ -16,5 +16,9 @@ class Oper(StrEnum):
     STARTS_WITH = "startsWith"
     ENDS_WITH = "endsWith"
 
+    CONTAINS_IGNORE_CASE = "containsIgnoreCase"
+    START_WITH_IGNORE_CASE = "startWithIgnoreCase"
+    ENDS_WITH_IGNORE_CASE = "endsWithIgnoreCase"
+
     ANY = "any"  # Equals one value from set
     HAS = "has"  # Collection contains items

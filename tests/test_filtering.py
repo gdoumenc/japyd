@@ -183,6 +183,50 @@ class TestFilter:
         assert filter.attr == "attr1"
         assert filter.value == ["test", "other"]
 
+    def test_parse_string_operators(self, client):
+        client.get("/", query_string={"filter": "contains(name,'Brian')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.CONTAINS
+        assert filter.attr == "name"
+        assert filter.value == "Brian"
+
+        client.get("/", query_string={"filter": "startsWith(name,'Brian')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.STARTS_WITH
+        assert filter.attr == "name"
+        assert filter.value == "Brian"
+
+        client.get("/", query_string={"filter": "endsWith(name,'Connor')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.ENDS_WITH
+        assert filter.attr == "name"
+        assert filter.value == "Connor"
+
+    def test_parse_string_operators_ignore_case(self, client):
+        client.get("/", query_string={"filter": "containsIgnoreCase(name,'brian')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.CONTAINS_IGNORE_CASE
+        assert filter.attr == "name"
+        assert filter.value == "brian"
+
+        client.get("/", query_string={"filter": "startWithIgnoreCase(name,'BRIAN')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.START_WITH_IGNORE_CASE
+        assert filter.attr == "name"
+        assert filter.value == "BRIAN"
+
+        client.get("/", query_string={"filter": "endsWithIgnoreCase(name,'CONNOR')"})
+        assert len(request.query_params.filters) == 1  # type: ignore
+        filter = next(iter(request.query_params.filters))  # type: ignore
+        assert filter.oper == Oper.ENDS_WITH_IGNORE_CASE
+        assert filter.attr == "name"
+        assert filter.value == "CONNOR"
+
     def test_parse_or(self):
         query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
         query = JsonApiQueryModel.model_validate({"filter": query_filter})
@@ -230,6 +274,75 @@ class TestReturnedValue:
         assert res.status_code == 200
         example = ExampleBaseModel(**res.json["data"]["attributes"])
         assert example.notice == 15
+
+    def test_match_string_operators(self, client):
+        # Test contains with lowercase
+        res = client.get("/example", query_string={"filter": "contains(name,'rian')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test startsWith with lowercase
+        res = client.get("/example", query_string={"filter": "startsWith(name,'Brian')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test endsWith with lowercase
+        res = client.get("/example", query_string={"filter": "endsWith(name,'Connor')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+    def test_match_string_operators_ignore_case(self, client):
+        # Test containsIgnoreCase with uppercase - should match "Brian O'Connor"
+        res = client.get("/example", query_string={"filter": "containsIgnoreCase(name,'BRIAN')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test containsIgnoreCase with lowercase
+        res = client.get("/example", query_string={"filter": "containsIgnoreCase(name,'connor')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test startWithIgnoreCase with uppercase - should match "Brian O'Connor"
+        res = client.get("/example", query_string={"filter": "startWithIgnoreCase(name,'BRIAN')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test startWithIgnoreCase with lowercase
+        res = client.get("/example", query_string={"filter": "startWithIgnoreCase(name,'brian')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test endsWithIgnoreCase with uppercase - should match "Brian O'Connor"
+        res = client.get("/example", query_string={"filter": "endsWithIgnoreCase(name,'CONNOR')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test endsWithIgnoreCase with lowercase
+        res = client.get("/example", query_string={"filter": "endsWithIgnoreCase(name,'connor')"})
+        assert res.status_code == 200
+        example = ExampleBaseModel(**res.json)
+        assert example.name == "Brian O'Connor"
+
+        # Test that case-sensitive operators do NOT match with wrong case
+        res = client.get("/example", query_string={"filter": "contains(name,'BRIAN')"})
+        assert res.status_code == 200
+        assert "meta" in res.json
+
+        res = client.get("/example", query_string={"filter": "startsWith(name,'brian')"})
+        assert res.status_code == 200
+        assert "meta" in res.json
+
+        res = client.get("/example", query_string={"filter": "endsWith(name,'CONNOR')"})
+        assert res.status_code == 200
+        assert "meta" in res.json
 
 
 class TestMultiFilter:

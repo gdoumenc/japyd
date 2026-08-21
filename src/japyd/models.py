@@ -106,6 +106,18 @@ class JsonApiBaseModel(BaseModel):
             return getattr(self, attr) > value
         if oper == Oper.GREATER_OR_EQUAL:
             return getattr(self, attr) >= value
+        if oper == Oper.CONTAINS:
+            return value in getattr(self, attr)
+        if oper == Oper.STARTS_WITH:
+            return getattr(self, attr).startswith(value)
+        if oper == Oper.ENDS_WITH:
+            return getattr(self, attr).endswith(value)
+        if oper == Oper.CONTAINS_IGNORE_CASE:
+            return value.lower() in getattr(self, attr).lower()
+        if oper == Oper.START_WITH_IGNORE_CASE:
+            return getattr(self, attr).lower().startswith(value.lower())
+        if oper == Oper.ENDS_WITH_IGNORE_CASE:
+            return getattr(self, attr).lower().endswith(value.lower())
         return False
 
 

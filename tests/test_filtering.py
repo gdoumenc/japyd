@@ -213,10 +213,10 @@ class TestFilter:
         assert filter.attr == "name"
         assert filter.value == "brian"
 
-        client.get("/", query_string={"filter": "startWithIgnoreCase(name,'BRIAN')"})
+        client.get("/", query_string={"filter": "startsWithIgnoreCase(name,'BRIAN')"})
         assert len(request.query_params.filters) == 1  # type: ignore
         filter = next(iter(request.query_params.filters))  # type: ignore
-        assert filter.oper == Oper.START_WITH_IGNORE_CASE
+        assert filter.oper == Oper.STARTS_WITH_IGNORE_CASE
         assert filter.attr == "name"
         assert filter.value == "BRIAN"
 
@@ -308,13 +308,13 @@ class TestReturnedValue:
         assert example.name == "Brian O'Connor"
 
         # Test startWithIgnoreCase with uppercase - should match "Brian O'Connor"
-        res = client.get("/example", query_string={"filter": "startWithIgnoreCase(name,'BRIAN')"})
+        res = client.get("/example", query_string={"filter": "startsWithIgnoreCase(name,'BRIAN')"})
         assert res.status_code == 200
         example = ExampleBaseModel(**res.json)
         assert example.name == "Brian O'Connor"
 
         # Test startWithIgnoreCase with lowercase
-        res = client.get("/example", query_string={"filter": "startWithIgnoreCase(name,'brian')"})
+        res = client.get("/example", query_string={"filter": "startsWithIgnoreCase(name,'brian')"})
         assert res.status_code == 200
         example = ExampleBaseModel(**res.json)
         assert example.name == "Brian O'Connor"

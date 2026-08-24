@@ -17,7 +17,7 @@ class Oper(StrEnum):
     ENDS_WITH = "endsWith"
 
     CONTAINS_IGNORE_CASE = "containsIgnoreCase"
-    START_WITH_IGNORE_CASE = "startWithIgnoreCase"
+    STARTS_WITH_IGNORE_CASE = "startsWithIgnoreCase"
     ENDS_WITH_IGNORE_CASE = "endsWithIgnoreCase"
 
     ANY = "any"  # Equals one value from set

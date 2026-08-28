@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from japyd import Resource, TopLevel, flatten_resource, extract_relationship
 
 BODY = json.loads((Path(__file__).parent / "_flatten_data.json").read_text())
@@ -110,3 +111,17 @@ class TestFlatten:
         assert data["order"]["lines"][1]["product_page"]["slug"] == "autre_produit"
         assert "tenant" in data
         assert data["tenant"]["id"] == "tenant"
+
+    def test_flatten_attr_not_found(self):
+        toplevel = TopLevel.model_validate(BODY)
+        
+        # Test that flattening a non-existent attribute raises AttributeError
+        with pytest.raises(AttributeError) as exc_info:
+            flatten_resource(toplevel.data, toplevel=toplevel, pattern="nonexistent")
+        assert "Relationship nonexistent not found in resource" in str(exc_info.value)
+        
+        # Test that flattening a non-existent attribute with ? suffix does not raise error
+        data = flatten_resource(toplevel.data, toplevel=toplevel, pattern="nonexistent?")
+        assert data is not None
+        assert isinstance(data, dict)
+        assert "nonexistent" not in data

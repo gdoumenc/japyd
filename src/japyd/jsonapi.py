@@ -433,13 +433,23 @@ def _add_flatten_relationship(
     if not res.relationships:
         raise AttributeError(f"No relationship in resource {res}")
 
+    # Handle multiple relationships (| separated)
     if "|" in relationship:
         for key in relationship.split("|"):
             _add_flatten_relationship(toplevel, res, flatten, key)
         return
 
+    # Handle optional relationship (ending with ?)
+    optional = relationship.endswith("?")
+    if optional:
+        relationship = relationship[:-1]
+
+    # Check if relationship exists and process
     if relationship not in res.relationships:
-        raise AttributeError(f"Relationship {relationship} not found in resource {res}")
+        if not optional:
+            raise AttributeError(f"Relationship {relationship} not found in resource {res}")
+        return
+
     rel = res.relationships[relationship]
     if isinstance(rel.data, list):
         flatten[relationship] = [flatten_resource(extract_from_resource_identifier(toplevel, r)) for r in rel.data]

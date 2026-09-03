@@ -4,15 +4,17 @@ from japyd import (
     Relationship,
     Resource,
     ResourceIdentifier,
+    SingleResourceTopLevel,
+    MultiResourcesTopLevel,
     TopLevel,
     extract_from_resource_identifier,
     extract_relationship,
 )
 
 
-class TestExtraction:
+class TestJsonApi:
 
-    def test_article(self, article):
+    def test_toplevel(self, article):
         toplevel = TopLevel(**article)
         author = extract_relationship(toplevel, "author")
         assert isinstance(author, Resource)
@@ -27,6 +29,9 @@ class TestExtraction:
         assert isinstance(author, Resource)
         assert author.attributes["firstName"] == "Dan"
 
+    def test_extraction(self, article):
+        toplevel = TopLevel(**article)
+        author = extract_relationship(toplevel, toplevel.data.relationships["author"])
         assert author.relationships is not None
         country = extract_relationship(toplevel, author.relationships["country"])
         assert isinstance(country, Resource)
@@ -115,8 +120,17 @@ class TestExtraction:
         assert resource.type == "comments"
         assert resource.attributes["body"] == "I like XML better"
 
-    def test_articles(self, articles):
-        toplevel = TopLevel(**articles)
+    def test_single(self, article):
+        toplevel = SingleResourceTopLevel(**article)
+        assert isinstance(toplevel.data, Resource)
+        assert toplevel.meta is not None
+        assert toplevel.meta["count"] == 1
+
+    def test_multi(self, articles):
+        toplevel = MultiResourcesTopLevel(**articles)
+        assert toplevel.meta is not None
+        assert toplevel.meta["count"] == len(toplevel.data)
+
         authors = extract_relationship(toplevel, "author")
         assert isinstance(authors, list)
         assert len(authors) == 2

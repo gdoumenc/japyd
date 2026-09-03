@@ -75,6 +75,12 @@ class TopLevel(BaseModel):
 class SingleResourceTopLevel(TopLevel):
     data: Resource | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
+    @model_validator(mode="after")
+    def validate_data(self: t.Self):
+        if self.meta is None:
+            self.meta = {"count": 0 if self.data is None else 1}
+        return self
+
     @classmethod
     def empty(cls, meta=None, jsonapi=None, links=None) -> SingleResourceTopLevel:
         if meta is None:
@@ -84,6 +90,12 @@ class SingleResourceTopLevel(TopLevel):
 
 class MultiResourcesTopLevel(TopLevel):
     data: list[Resource] = Field(default_factory=list)  # pyright: ignore[reportIncompatibleVariableOverride]
+
+    @model_validator(mode="after")
+    def validate_data(self: t.Self):
+        if self.meta is None:
+            self.meta = {"count": len(self.data)}
+        return self
 
     @classmethod
     def empty(cls, meta=None, jsonapi=None, links=None) -> MultiResourcesTopLevel:

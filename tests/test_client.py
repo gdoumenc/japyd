@@ -76,6 +76,8 @@ def test_request(request):
     response = client("get", "/orders", id=3)
     top = SingleResourceTopLevel.model_validate(response)
     assert isinstance(top.data, Resource)
+    assert top.meta is not None
+    assert top.meta["count"] == 1
     assert top.data is not None
     assert top.data.id == "3"
 

@@ -4,6 +4,7 @@ import pytest
 from flask import Flask, request
 from flask_pydantic import validate
 from pydantic import computed_field
+from werkzeug.exceptions import UnprocessableEntity
 
 from japyd import JsonApiBodyModel, JsonApiQueryModel, SingleResourceTopLevel
 from japyd.dotnet import Oper
@@ -228,10 +229,51 @@ class TestFilter:
         assert filter.value == "CONNOR"
 
     def test_parse_or(self):
-        query_filter = "not(equals (name,'Brian O''Connor'), equals(attr1,null) )"
+        query_filter = "or(equals(name,'Brian O''Connor, Jr'), equals(attr1,null) )"
         query = JsonApiQueryModel.model_validate({"filter": query_filter})
         assert len(query.filters) == 1
         filter = next(iter(query.filters))
+        assert filter.oper == Oper.OR
+        assert len(filter.subfilter) == 2
+        assert filter.subfilter[0].oper == Oper.EQUALS
+        assert filter.subfilter[0].attr == "name"
+        assert filter.subfilter[0].value == "Brian O'Connor, Jr"
+        assert filter.subfilter[1].attr == "attr1"
+        assert filter.subfilter[1].value is None
+
+    def test_parse_and(self):
+        query_filter = "and(equals(a,'1'),greaterThan(b,2),startsWith(c,'x'))"
+        filter = JsonApiQueryModel.model_validate({"filter": query_filter}).filters[0]
+        assert filter.oper == Oper.AND
+        assert [f.oper for f in filter.subfilter] == [Oper.EQUALS, Oper.GREATER_THAN, Oper.STARTS_WITH]
+        assert [f.value for f in filter.subfilter] == ["1", 2, "x"]
+
+    def test_parse_nested_logical(self):
+        query_filter = "and(equals(a,'1'),or(equals(b,'2'),not(equals(c,'3'))))"
+        filter = JsonApiQueryModel.model_validate({"filter": query_filter}).filters[0]
+        assert filter.oper == Oper.AND
+        first, second = filter.subfilter
+        assert first.attr == "a"
+        assert second.oper == Oper.OR
+        assert second.subfilter[0].attr == "b"
+        assert second.subfilter[1].oper == Oper.NOT
+        assert second.subfilter[1].subfilter.attr == "c"
+
+    @pytest.mark.parametrize(
+        "query_filter",
+        [
+            "and(equals(a,'1'))",  # and requires at least two filters
+            "or(equals(a,'1'),)",
+            "not(equals(a,'1'),equals(b,'2'))",  # not takes exactly one filter
+            "and(equals(a,'1'),equals(b,'2')",
+            "and(equals(a,'1')),equals(b,'2'))",
+            "and(equals(a,'1),equals(b,'2'))",
+            "not(equals(a,'1')) trailing",
+        ],
+    )
+    def test_parse_wrong_logical(self, query_filter):
+        with pytest.raises(UnprocessableEntity):
+            JsonApiQueryModel.model_validate({"filter": query_filter})
 
     def test_parse_filter_array(self, client):
         client.get("/", query_string={"filter[0]": "equals(attr1,0)", "filter[1]": "any(attr2, 'test', 'other')"})

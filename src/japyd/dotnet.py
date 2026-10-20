@@ -41,11 +41,9 @@ FILTER_REGEXP = (
 )
 COMPILED_FILTER_REGEXP = re.compile(rf"^\s*{FILTER_REGEXP}\s*$")
 
-NOT_REGEXP = rf"\s*{Oper.NOT}\s*[(]\s*(?P<filter>.*)\s*[)]\s*"
-COMPILED_NOT_REGEXP = re.compile(NOT_REGEXP)
-
-OR_AND_REGEXP = rf"\s*({Oper.OR}|{Oper.AND})\s*[(]\s*(?P<filter1>.*)\s*,\s*(?P<filter2>.*)\s*[)]\s*"
-COMPILED_OR_AND_REGEXP = re.compile(OR_AND_REGEXP)
+# Arguments of logical operators may be nested, so they are split by _split_arguments and not by the regexp
+LOGICAL_REGEXP = rf"^\s*(?P<oper>{Oper.NOT}|{Oper.OR}|{Oper.AND})\s*[(](?P<args>.*)[)]\s*$"
+COMPILED_LOGICAL_REGEXP = re.compile(LOGICAL_REGEXP)
 
 
 class JsonApiPagination(BaseModel):
@@ -58,7 +56,7 @@ class JsonApiQueryFilter(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     oper: Oper
-    subfilter: tuple[JsonApiQueryFilter, JsonApiQueryFilter] | JsonApiQueryFilter | None = None
+    subfilter: tuple[JsonApiQueryFilter, ...] | JsonApiQueryFilter | None = None
     attr: str | None = None
     value: str | float | int | list | None = None
     other_attr: str | None = None
@@ -301,15 +299,14 @@ class JsonApiQueryModel(BaseModel):
                 values = [v.strip() for v in reg.group("values").split(",")]
                 return JsonApiQueryFilter(oper=Oper(oper), attr=reg.group("list_attr"), value=values)
 
-        if reg := COMPILED_NOT_REGEXP.match(filter):
-            filter_expr = reg.group("filter")
-            return JsonApiQueryFilter(oper=Oper.NOT, subfilter=cls._parse_filter(filter_expr))
-        if reg := COMPILED_OR_AND_REGEXP.match(filter):
-            filter1_expr = reg.group("filter1")
-            filter2_expr = reg.group("filter2")
-            return JsonApiQueryFilter(
-                oper=Oper.NOT, subfilter=(cls._parse_filter(filter1_expr), cls._parse_filter(filter2_expr))
-            )
+        if reg := COMPILED_LOGICAL_REGEXP.match(filter):
+            oper = Oper(reg.group("oper"))
+            args = _split_arguments(reg.group("args"))
+            if args is not None:
+                if oper == Oper.NOT and len(args) == 1:
+                    return JsonApiQueryFilter(oper=oper, subfilter=cls._parse_filter(args[0]))
+                if oper in (Oper.OR, Oper.AND) and len(args) >= 2:
+                    return JsonApiQueryFilter(oper=oper, subfilter=tuple(cls._parse_filter(arg) for arg in args))
         msg = f"Wrong filter parameters: {filter}"
         raise UnprocessableEntity(msg)
 
@@ -325,6 +322,36 @@ class JsonApiQueryModel(BaseModel):
                 value = value.replace("''", "'")
 
         return value
+
+
+def _split_arguments(args: str) -> list[str] | None:
+    """Splits the arguments on top level commas, ignoring commas in nested parenthesis or quoted strings.
+
+    Returns None if the parenthesis are unbalanced or a string is not closed.
+    """
+    parts: list[str] = []
+    depth = 0
+    in_quote = False
+    start = 0
+    for i, c in enumerate(args):
+        if c == "'":
+            # A doubled quote inside a string toggles twice, so it is kept as is
+            in_quote = not in_quote
+        elif in_quote:
+            continue
+        elif c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth < 0:
+                return None
+        elif c == "," and depth == 0:
+            parts.append(args[start:i].strip())
+            start = i + 1
+    if depth != 0 or in_quote:
+        return None
+    parts.append(args[start:].strip())
+    return parts
 
 
 def _to_string_or_numeric(value: str) -> str | int | float:

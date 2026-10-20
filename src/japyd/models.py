@@ -5,11 +5,13 @@ import typing as t
 
 from pydantic import AnyUrl, BaseModel
 
-from .filter import Oper
+from .filter import FilterError, Oper
 from .jsonapi import Link, Relationship, Resource, ResourceIdentifier, flatten_resource
 
 if t.TYPE_CHECKING:
     from .dotnet import JsonApiQueryModel
+
+_UNKNOWN = object()
 
 
 class JsonApiBaseModel(BaseModel):
@@ -95,29 +97,56 @@ class JsonApiBaseModel(BaseModel):
             id=jsonapi_id, type=jsonapi_type, attributes=attributes, relationships=relationships, links=self.links
         )
 
+    def resolve_attr(self, attr: str) -> t.Any:
+        """Returns the attribute value, following the to-one relationships if the attribute is a dotted path.
+
+        Raises FilterError if the attribute is unknown or the path goes through a to-many relationship.
+        """
+        value: t.Any = self
+        for name in attr.split("."):
+            if value is None:
+                return None
+            if isinstance(value, list):
+                raise FilterError(f"Cannot filter on {attr} through a to-many relationship, use has instead")
+            value = getattr(value, name, _UNKNOWN)
+            if value is _UNKNOWN or callable(value):
+                raise FilterError(f"Unknown attribute {attr}")
+        return value
+
     def match(self, oper: Oper, attr: str, value: t.Any) -> bool:
+        attr_value = self.resolve_attr(attr)
         if oper == Oper.EQUALS:
-            return getattr(self, attr) == value
-        if oper == Oper.LESS_THAN:
-            return getattr(self, attr) < value
-        if oper == Oper.LESS_OR_EQUAL:
-            return getattr(self, attr) <= value
-        if oper == Oper.GREATER_THAN:
-            return getattr(self, attr) > value
-        if oper == Oper.GREATER_OR_EQUAL:
-            return getattr(self, attr) >= value
-        if oper == Oper.CONTAINS:
-            return value in getattr(self, attr)
-        if oper == Oper.STARTS_WITH:
-            return getattr(self, attr).startswith(value)
-        if oper == Oper.ENDS_WITH:
-            return getattr(self, attr).endswith(value)
-        if oper == Oper.CONTAINS_IGNORE_CASE:
-            return value.lower() in getattr(self, attr).lower()
-        if oper == Oper.STARTS_WITH_IGNORE_CASE:
-            return getattr(self, attr).lower().startswith(value.lower())
-        if oper == Oper.ENDS_WITH_IGNORE_CASE:
-            return getattr(self, attr).lower().endswith(value.lower())
+            return attr_value == value
+        if oper == Oper.ANY:
+            return attr_value in value
+
+        # As in SQL, a null value is never ordered or contained
+        if attr_value is None or value is None:
+            return False
+
+        try:
+            if oper == Oper.LESS_THAN:
+                return attr_value < value
+            if oper == Oper.LESS_OR_EQUAL:
+                return attr_value <= value
+            if oper == Oper.GREATER_THAN:
+                return attr_value > value
+            if oper == Oper.GREATER_OR_EQUAL:
+                return attr_value >= value
+            if oper == Oper.CONTAINS:
+                return value in attr_value
+            if oper == Oper.STARTS_WITH:
+                return attr_value.startswith(value)
+            if oper == Oper.ENDS_WITH:
+                return attr_value.endswith(value)
+            if oper == Oper.CONTAINS_IGNORE_CASE:
+                return value.lower() in attr_value.lower()
+            if oper == Oper.STARTS_WITH_IGNORE_CASE:
+                return attr_value.lower().startswith(value.lower())
+            if oper == Oper.ENDS_WITH_IGNORE_CASE:
+                return attr_value.lower().endswith(value.lower())
+        except (TypeError, AttributeError) as e:
+            raise FilterError(f"Cannot apply {oper} on {attr} with value {value!r}") from e
         return False
 
 

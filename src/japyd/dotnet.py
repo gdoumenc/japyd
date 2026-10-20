@@ -7,9 +7,14 @@ from http import HTTPStatus
 
 from flask import Response, request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from werkzeug.exceptions import InternalServerError, NotFound, UnprocessableEntity
+from werkzeug.exceptions import (
+    BadRequest,
+    InternalServerError,
+    NotFound,
+    UnprocessableEntity,
+)
 
-from .filter import Oper
+from .filter import FilterError, Oper
 from .jsonapi import (
     Error,
     MultiResourcesTopLevel,
@@ -32,7 +37,7 @@ OPER_REGEXP = (
     rf"|{Oper.CONTAINS}|{Oper.STARTS_WITH}|{Oper.ENDS_WITH}"
     rf"|{Oper.CONTAINS_IGNORE_CASE}|{Oper.STARTS_WITH_IGNORE_CASE}|{Oper.ENDS_WITH_IGNORE_CASE})"
 )
-LIST_OPER_REGEXP = rf"({Oper.ANY}|{Oper.HAS})"
+LIST_OPER_REGEXP = rf"({Oper.ANY})"
 LIST_VALUES_REGEXP = rf"(('([^']|'')*')|{NUMERIC_REGEXP})"
 FILTER_REGEXP = (
     rf"(?P<oper>{OPER_REGEXP})\s*[(]\s*(?P<attr>{IDENTIFIER_REGEXP})\s*,\s*({VALUE_REGEXP})\s*[)]"
@@ -42,8 +47,9 @@ FILTER_REGEXP = (
 COMPILED_FILTER_REGEXP = re.compile(rf"^\s*{FILTER_REGEXP}\s*$")
 
 # Arguments of logical operators may be nested, so they are split by _split_arguments and not by the regexp
-LOGICAL_REGEXP = rf"^\s*(?P<oper>{Oper.NOT}|{Oper.OR}|{Oper.AND})\s*[(](?P<args>.*)[)]\s*$"
+LOGICAL_REGEXP = rf"^\s*(?P<oper>{Oper.NOT}|{Oper.OR}|{Oper.AND}|{Oper.HAS})\s*[(](?P<args>.*)[)]\s*$"
 COMPILED_LOGICAL_REGEXP = re.compile(LOGICAL_REGEXP)
+COMPILED_IDENTIFIER_REGEXP = re.compile(IDENTIFIER_REGEXP)
 
 
 class JsonApiPagination(BaseModel):
@@ -64,7 +70,7 @@ class JsonApiQueryFilter(BaseModel):
     @model_validator(mode="before")
     def parse_value(cls, data: dict) -> dict:
         # On subfilter validation does nothing
-        if isinstance(data, dict) and data["oper"] in (Oper.ANY, Oper.HAS):
+        if isinstance(data, dict) and data["oper"] == Oper.ANY:
             typed_values = []
             for value in data["value"]:
                 value = _to_string_or_numeric(value)
@@ -74,21 +80,30 @@ class JsonApiQueryFilter(BaseModel):
         return data
 
     def match(self, model) -> bool:
-        if self.oper in (
-            Oper.EQUALS,
-            Oper.LESS_THAN,
-            Oper.LESS_OR_EQUAL,
-            Oper.GREATER_THAN,
-            Oper.GREATER_OR_EQUAL,
-            Oper.CONTAINS,
-            Oper.STARTS_WITH,
-            Oper.ENDS_WITH,
-            Oper.CONTAINS_IGNORE_CASE,
-            Oper.STARTS_WITH_IGNORE_CASE,
-            Oper.ENDS_WITH_IGNORE_CASE,
-        ):
-            return model.match(self.oper, self.attr, self.value)
-        return False
+        if self.oper == Oper.NOT:
+            assert isinstance(self.subfilter, JsonApiQueryFilter)
+            return not self.subfilter.match(model)
+        if self.oper == Oper.AND:
+            assert isinstance(self.subfilter, tuple)
+            return all(f.match(model) for f in self.subfilter)
+        if self.oper == Oper.OR:
+            assert isinstance(self.subfilter, tuple)
+            return any(f.match(model) for f in self.subfilter)
+        if self.oper == Oper.HAS:
+            # As JsonApiDotNetCore: has(collection) or has(collection, filter on the collection items)
+            assert self.attr is not None
+            collection = model.resolve_attr(self.attr) or []
+            if self.subfilter is None:
+                return len(collection) > 0
+            assert isinstance(self.subfilter, JsonApiQueryFilter)
+            if any(not isinstance(item, JsonApiBaseModel) for item in collection):
+                msg = f"Filter has({self.attr}, ...) is only allowed on a collection of resources, use contains instead"
+                raise FilterError(msg)
+            return any(self.subfilter.match(item) for item in collection)
+
+        # Comparison with another attribute of the model
+        value = model.resolve_attr(self.other_attr) if self.other_attr else self.value
+        return model.match(self.oper, self.attr, value)
 
 
 JsonApiQueryFilter.model_rebuild()
@@ -120,10 +135,16 @@ class JsonApiQueryModel(BaseModel):
         return None
 
     def match(self, model: JsonApiBaseModel):
-        """Checks if the model matches the query filters."""
-        for filter in self.filters:
-            if not filter.match(model):
-                return False
+        """Checks if the model matches the query filters.
+
+        Raises BadRequest if a filter cannot be applied on the model.
+        """
+        try:
+            for filter in self.filters:
+                if not filter.match(model):
+                    return False
+        except FilterError as e:
+            raise BadRequest(str(e)) from e
         return True
 
     @staticmethod
@@ -307,6 +328,9 @@ class JsonApiQueryModel(BaseModel):
                     return JsonApiQueryFilter(oper=oper, subfilter=cls._parse_filter(args[0]))
                 if oper in (Oper.OR, Oper.AND) and len(args) >= 2:
                     return JsonApiQueryFilter(oper=oper, subfilter=tuple(cls._parse_filter(arg) for arg in args))
+                if oper == Oper.HAS and len(args) in (1, 2) and COMPILED_IDENTIFIER_REGEXP.fullmatch(args[0]):
+                    subfilter = cls._parse_filter(args[1]) if len(args) == 2 else None
+                    return JsonApiQueryFilter(oper=oper, attr=args[0], subfilter=subfilter)
         msg = f"Wrong filter parameters: {filter}"
         raise UnprocessableEntity(msg)
 

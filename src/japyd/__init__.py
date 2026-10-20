@@ -1,5 +1,6 @@
 from .client import JapydClient
 from .dotnet import JsonApiBaseModel, JsonApiQueryModel
+from .filter import FilterError
 from .jsonapi import (
     Error,
     JsonApiApp,
@@ -20,6 +21,7 @@ from .jsonapi import (
 
 __all__ = [
     "Error",
+    "FilterError",
     "JapydClient",
     "JsonApiApp",
     "JsonApiBaseModel",

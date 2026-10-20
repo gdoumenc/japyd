@@ -3,10 +3,15 @@ import typing as t
 import pytest
 from flask import Flask, request
 from flask_pydantic import validate
-from pydantic import computed_field
-from werkzeug.exceptions import UnprocessableEntity
+from pydantic import Field, computed_field
+from werkzeug.exceptions import BadRequest, UnprocessableEntity
 
-from japyd import JsonApiBodyModel, JsonApiQueryModel, SingleResourceTopLevel
+from japyd import (
+    FilterError,
+    JsonApiBodyModel,
+    JsonApiQueryModel,
+    SingleResourceTopLevel,
+)
 from japyd.dotnet import Oper
 from japyd.models import JsonApiBaseModel
 
@@ -416,3 +421,126 @@ class TestMultiFilter:
     # assert example.notice == 15
     # assert "other" not in res.json["attributes"]
     # assert "other" in res.json["relationships"]
+
+
+class LineModel(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "line"
+    id: str
+    quantity: int
+
+
+class MatchedModel(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "matched"
+    name: str = "Brian"
+    notice: int = 10
+    limit: int = 20
+    lines: list[LineModel] = Field(
+        default_factory=lambda: [LineModel(id="1", quantity=1), LineModel(id="2", quantity=5)]
+    )
+    others: list[LineModel] | None = None
+    main: LineModel = Field(default_factory=lambda: LineModel(id="1", quantity=1))
+    secondary: LineModel | None = None
+    comment: str | None = None
+
+
+class TestMatch:
+
+    @pytest.mark.parametrize(
+        "query_filter, expected",
+        [
+            ("not(equals(name,'Brian'))", False),
+            ("not(equals(name,'Dom'))", True),
+            ("and(equals(name,'Brian'),greaterThan(notice,5))", True),
+            ("and(equals(name,'Brian'),greaterThan(notice,5),lessThan(notice,8))", False),
+            ("or(equals(name,'Dom'),equals(notice,10))", True),
+            ("or(equals(name,'Dom'),equals(notice,11))", False),
+            ("and(equals(name,'Brian'),or(equals(notice,11),not(equals(notice,12))))", True),
+            ("any(name,'Dom','Brian')", True),
+            ("any(notice,1,2)", False),
+            ("has(lines)", True),
+            ("has(others)", False),
+            ("has(lines,greaterThan(quantity,3))", True),
+            ("has(lines,greaterThan(quantity,10))", False),
+            ("has(lines,and(equals(id,'1'),equals(quantity,1)))", True),
+            ("has(others,equals(id,'1'))", False),
+            ("not(has(others))", True),
+            ("equals(main.id,'1')", True),
+            ("greaterThan(main.quantity,0)", True),
+            ("lessThan(notice,main.quantity)", False),
+            ("equals(secondary.id,null)", True),
+            ("equals(secondary.id,'1')", False),
+            ("equals(comment,null)", True),
+            ("not(equals(comment,null))", False),
+            ("lessThan(comment,'a')", False),
+            ("greaterOrEqual(comment,'a')", False),
+            ("contains(comment,'a')", False),
+            ("startsWithIgnoreCase(comment,'a')", False),
+            ("greaterThan(secondary.quantity,0)", False),
+            ("lessThan(notice,null)", False),
+            ("lessThan(notice,limit)", True),
+            ("greaterThan(notice,limit)", False),
+        ],
+    )
+    def test_match(self, query_filter, expected):
+        query = JsonApiQueryModel.model_validate({"filter": query_filter})
+        assert query.match(MatchedModel()) is expected
+
+    def test_parse_has(self):
+        filter = JsonApiQueryModel.model_validate({"filter": "has(lines)"}).filters[0]
+        assert filter.oper == Oper.HAS
+        assert filter.attr == "lines"
+        assert filter.subfilter is None
+
+        filter = JsonApiQueryModel.model_validate({"filter": "has(lines, equals(id,'1'))"}).filters[0]
+        assert filter.oper == Oper.HAS
+        assert filter.attr == "lines"
+        assert filter.subfilter.oper == Oper.EQUALS
+        assert filter.subfilter.attr == "id"
+
+    @pytest.mark.parametrize(
+        "query_filter",
+        ["has()", "has('lines')", "has(lines,'a')", "has(lines,equals(id,'1'),equals(id,'2'))"],
+    )
+    def test_parse_wrong_has(self, query_filter):
+        with pytest.raises(UnprocessableEntity):
+            JsonApiQueryModel.model_validate({"filter": query_filter})
+
+    def test_match_has_on_values(self):
+        class TaggedModel(JsonApiBaseModel):
+            jsonapi_type: t.ClassVar[str] = "tagged"
+            tags: list[str] = Field(default_factory=lambda: ["a", "b"])
+
+        query = JsonApiQueryModel.model_validate({"filter": "has(tags)"})
+        assert query.match(TaggedModel()) is True
+
+        query = JsonApiQueryModel.model_validate({"filter": "has(tags,equals(name,'a'))"})
+        with pytest.raises(BadRequest):
+            query.match(TaggedModel())
+
+    @pytest.mark.parametrize(
+        "query_filter",
+        [
+            "equals(unknown,'a')",
+            "equals(main.unknown,'a')",
+            "equals(lines.id,'1')",  # to-many relationship must be filtered with has
+            "equals(match,'a')",  # methods are not attributes
+            "lessThan(name,5)",
+            "startsWith(notice,'1')",
+            "has(unknown)",
+            "lessThan(notice,unknown)",
+        ],
+    )
+    def test_match_wrong_attribute(self, query_filter):
+        query = JsonApiQueryModel.model_validate({"filter": query_filter})
+        with pytest.raises(BadRequest):
+            query.match(MatchedModel())
+
+    def test_model_match_raises_filter_error(self):
+        with pytest.raises(FilterError):
+            MatchedModel().match(Oper.EQUALS, "unknown", "a")
+        with pytest.raises(FilterError):
+            MatchedModel().match(Oper.LESS_THAN, "name", 5)
+
+    def test_match_all_filters(self):
+        query = JsonApiQueryModel.model_validate({"filter": ["equals(name,'Brian')", "equals(notice,11)"]})
+        assert query.match(MatchedModel()) is False

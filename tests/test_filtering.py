@@ -280,6 +280,31 @@ class TestFilter:
         with pytest.raises(UnprocessableEntity):
             JsonApiQueryModel.model_validate({"filter": query_filter})
 
+    def test_parse_special_characters(self, client):
+        filter = JsonApiQueryModel.model_validate({"filter": "equals(tenant_data.gmp+,true)"}).filters[0]
+        assert filter.attr == "tenant_data.gmp+"
+        assert filter.value is True
+        assert filter.other_attr is None
+
+        filter = JsonApiQueryModel.model_validate({"filter": "equals(a,false)"}).filters[0]
+        assert filter.value is False
+
+        filter = JsonApiQueryModel.model_validate({"filter": "equals(a,5x)"}).filters[0]
+        assert filter.value is None
+        assert filter.other_attr == "5x"
+
+        # In a query string '+' is decoded as a space, so it must be encoded as %2B
+        client.get("/?filter=equals(tenant_data.gmp%2B,true)")
+        filter = request.query_params.filters[0]  # type: ignore
+        assert filter.attr == "tenant_data.gmp+"
+
+    def test_parse_quoted_values(self):
+        filter = JsonApiQueryModel.model_validate({"filter": "equals(a,'''quoted''')"}).filters[0]
+        assert filter.value == "'quoted'"
+
+        filter = JsonApiQueryModel.model_validate({"filter": "any(a,'x,y','O''Connor',3)"}).filters[0]
+        assert filter.value == ["x,y", "O'Connor", 3]
+
     def test_parse_filter_array(self, client):
         client.get("/", query_string={"filter[0]": "equals(attr1,0)", "filter[1]": "any(attr2, 'test', 'other')"})
         filters = list(request.query_params.filters)  # type: ignore
@@ -441,6 +466,7 @@ class MatchedModel(JsonApiBaseModel):
     main: LineModel = Field(default_factory=lambda: LineModel(id="1", quantity=1))
     secondary: LineModel | None = None
     comment: str | None = None
+    tenant_data: dict = Field(default_factory=lambda: {"gmp+": True, "é-x/y": "Brian", "sub": {"key": 1}})
 
 
 class TestMatch:
@@ -477,6 +503,13 @@ class TestMatch:
             ("startsWithIgnoreCase(comment,'a')", False),
             ("greaterThan(secondary.quantity,0)", False),
             ("lessThan(notice,null)", False),
+            ("equals(tenant_data.gmp+,true)", True),
+            ("equals(tenant_data.gmp+,false)", False),
+            ("equals(tenant_data.é-x/y,name)", True),
+            ("equals(tenant_data.sub.key,1)", True),
+            ("equals(tenant_data.missing,null)", True),
+            ("equals(tenant_data.missing.key,null)", True),
+            ("and(equals(tenant_data.gmp+,true),any(tenant_data.é-x/y,'Dom','Brian'))", True),
             ("lessThan(notice,limit)", True),
             ("greaterThan(notice,limit)", False),
         ],

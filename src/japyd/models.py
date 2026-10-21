@@ -100,6 +100,7 @@ class JsonApiBaseModel(BaseModel):
     def resolve_attr(self, attr: str) -> t.Any:
         """Returns the attribute value, following the to-one relationships if the attribute is a dotted path.
 
+        A dict attribute (JSON value) is followed by its keys, a missing key giving None.
         Raises FilterError if the attribute is unknown or the path goes through a to-many relationship.
         """
         value: t.Any = self
@@ -108,6 +109,9 @@ class JsonApiBaseModel(BaseModel):
                 return None
             if isinstance(value, list):
                 raise FilterError(f"Cannot filter on {attr} through a to-many relationship, use has instead")
+            if isinstance(value, dict):
+                value = value.get(name)
+                continue
             value = getattr(value, name, _UNKNOWN)
             if value is _UNKNOWN or callable(value):
                 raise FilterError(f"Unknown attribute {attr}")

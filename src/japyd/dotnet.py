@@ -27,8 +27,10 @@ from .models import JsonApiBaseModel
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
 
-NUMERIC_REGEXP = r"[-+]?[0-9]*.?[0-9]+([eE][-+]?[0-9]+)?"
-IDENTIFIER_REGEXP = r"([A-Za-z_][A-Za-z0-9_\.]*)"
+NUMERIC_REGEXP = r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"
+# Any character except the filter syntax delimiters, to allow keys like 'gmp+' in a JSON attribute
+IDENTIFIER_REGEXP = r"([^\s(),']+)"
+KEYWORD_VALUES: dict[str, bool | None] = {"null": None, "true": True, "false": False}
 QUOTED_REGEXP = r"('[^']|'')*'"
 VALUE_REGEXP = rf"(?P<value>'([^']|'')*')|(?P<numeric>{NUMERIC_REGEXP})|(?P<other_attr>{IDENTIFIER_REGEXP})"
 OPER_REGEXP = (
@@ -64,7 +66,7 @@ class JsonApiQueryFilter(BaseModel):
     oper: Oper
     subfilter: tuple[JsonApiQueryFilter, ...] | JsonApiQueryFilter | None = None
     attr: str | None = None
-    value: str | float | int | list | None = None
+    value: bool | str | float | int | list | None = None
     other_attr: str | None = None
 
     @model_validator(mode="before")
@@ -312,12 +314,12 @@ class JsonApiQueryModel(BaseModel):
             if oper:
                 value = cls._parse_value(reg)
                 other = reg.group("other_attr")
-                return JsonApiQueryFilter(
-                    oper=Oper(oper), attr=reg.group("attr"), value=value, other_attr=other if other != "null" else None
-                )
+                if other in KEYWORD_VALUES:
+                    value, other = KEYWORD_VALUES[other], None
+                return JsonApiQueryFilter(oper=Oper(oper), attr=reg.group("attr"), value=value, other_attr=other)
             oper = reg.group("list_oper")
             if oper:
-                values = [v.strip() for v in reg.group("values").split(",")]
+                values = _split_arguments(reg.group("values"))
                 return JsonApiQueryFilter(oper=Oper(oper), attr=reg.group("list_attr"), value=values)
 
         if reg := COMPILED_LOGICAL_REGEXP.match(filter):
@@ -342,8 +344,7 @@ class JsonApiQueryModel(BaseModel):
         else:
             value = reg.group("value")
             if value:
-                value = value.strip("'")
-                value = value.replace("''", "'")
+                value = value[1:-1].replace("''", "'")
 
         return value
 
@@ -380,5 +381,5 @@ def _split_arguments(args: str) -> list[str] | None:
 
 def _to_string_or_numeric(value: str) -> str | int | float:
     if value.startswith("'"):
-        return value.strip("'")
+        return value[1:-1].replace("''", "'")
     return float(value) if "." in value else int(value)

@@ -8,10 +8,23 @@ Automate JSON:API relationships with Pydantic. No manual mapping, just clean cod
 [![Codecov](https://codecov.io/gh/gdoumenc/japyd/branch/main/graph/badge.svg)](https://codecov.io/gh/gdoumenc/japyd)
 [![PyPI](https://img.shields.io/pypi/v/japyd)](https://pypi.org/project/japyd/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/gdoumenc/japyd/refs/heads/master/pyproject.toml)](https://pypi.org/project/japyd/)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https://raw.githubusercontent.com/gdoumenc/japyd/refs/heads/main/pyproject.toml)](https://pypi.org/project/japyd/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/gdoumenc/japyd/graphs/commit-activity)
 [![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/gdoumenc/japyd)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+**japyd** (JSON:API + PYDantic) is a Python library to build [JSON:API](https://jsonapi.org/) servers with Flask and
+Pydantic: Pydantic models become JSON:API resources with relationships and included resources, and query parameters
+(`filter`, `sort`, `page`, `fields`, `include`) are parsed with the [JsonApiDotNetCore](https://www.jsonapi.net/)
+filter syntax.
+
+## Installation
+
+```bash
+pip install japyd
+```
+
+Requires Python 3.11+, Flask and Pydantic 2.
 
 ## Japyd: Core Value Propositions
 
@@ -29,7 +42,7 @@ It provides a set of utilities to facilitate the creation, manipulation, and val
 **Advanced Query Parsing:** Supports JSON:API.NET-style query parameters, including filtering, sorting, pagination, sparse fieldsets, and inclusion.  
 **Built-in Validation:** Ensures query parameters are syntactically correct and consistent.  
 
-- Filtering: filter[name]=Guillaume
+- Filtering: filter=and(equals(name,'Guillaume'),greaterThan(age,18))
 - Sorting: sort=-created,title
 - Pagination: page[number]=1&page[size]=10
 - Sparse Fieldsets: fields[articles]=title,author
@@ -152,7 +165,51 @@ flattened_with_items = flatten_resource(
 
 #### Filtering
 
-The complete filtering syntax of [JsonApiDotNetCore](https://www.jsonapi.net/) is supported
+Filters use the [JsonApiDotNetCore filter syntax](https://www.jsonapi.net/usage/reading/filtering.html).
+They are parsed by `JsonApiQueryModel` and evaluated on Pydantic models with `query.match(model)`:
+
+```python
+@app.route("/orders")
+@validate(exclude_none=True)
+def get_orders(query: JsonApiQueryModel):
+    orders = [order for order in load_orders() if query.match(order)]
+    return query.paginate(orders)
+```
+
+```http
+GET /orders?filter=and(equals(status,'open'),has(items,greaterThan(price,50)))
+```
+
+| Operator | Example | Meaning |
+| --- | --- | --- |
+| `equals` | `equals(status,'open')`, `equals(comment,null)` | equality, `null` for missing value |
+| `lessThan`, `lessOrEqual`, `greaterThan`, `greaterOrEqual` | `greaterThan(price,10)` | ordering |
+| `contains`, `startsWith`, `endsWith` | `startsWith(name,'Bri')` | string matching |
+| `containsIgnoreCase`, `startsWithIgnoreCase`, `endsWithIgnoreCase` | `containsIgnoreCase(name,'bri')` | case insensitive (japyd extension) |
+| `any` | `any(status,'open','closed')` | value is one of the list |
+| `has` | `has(items)`, `has(items,greaterThan(price,50))` | to-many relationship is not empty, or has an item matching the filter |
+| `not`, `and`, `or` | `or(equals(a,1),not(equals(b,2)))` | logical composition, `and`/`or` take 2 or more filters |
+
+Values:
+
+- strings are quoted with `'`, a quote inside a string is doubled: `'O''Connor'`
+- numbers, `true`, `false` and `null` are written unquoted
+- an unquoted name is another attribute of the model: `lessThan(quantity,stock)`
+
+Attributes:
+
+- a dotted path follows to-one relationships and dict (JSON) attributes: `equals(customer.country,'FR')`,
+  `equals(tenant_data.gmp+,true)` (in a URL, `+` must be encoded as `%2B`)
+- to-many relationships are filtered with `has`
+- as in SQL, a `null` value never matches an ordering or string operator
+
+Errors:
+
+- a syntax error returns `422 Unprocessable Entity`
+- an unknown attribute or incompatible types return `400 Bad Request` (`FilterError` when calling `model.match`
+  directly)
+
+Not supported yet: `count()`, `isType()` and filter scoping on relationships (`filter[items]=...`).
 
 ## References
 

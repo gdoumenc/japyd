@@ -1,0 +1,29 @@
+# japyd
+
+> japyd (JSON:API + PYDantic) is a Python library to build JSON:API (https://jsonapi.org/) servers with Flask and Pydantic 2. Pydantic models become JSON:API resources (attributes, relationships, included), and query parameters (filter, sort, page, fields, include) are parsed with the JsonApiDotNetCore filter syntax and evaluated on the models. Install with `pip install japyd`, Python 3.11+.
+
+Key points:
+
+- Subclass `JsonApiBaseModel`, set `jsonapi_type: ClassVar[str]` and an `id` field. A field typed as another `JsonApiBaseModel` (or a list of them) becomes a relationship; other fields are attributes.
+- Declare `query: JsonApiQueryModel` in a Flask view decorated with `flask_pydantic.validate`, then return `query.one(model)`, `query.one_or_none(model)` or `query.paginate(models)`.
+- Filter with `query.match(model)`. Syntax: `equals(attr,'value')`, `lessThan`, `lessOrEqual`, `greaterThan`, `greaterOrEqual`, `contains`, `startsWith`, `endsWith`, the `...IgnoreCase` variants, `any(attr,'a','b')`, `has(to_many)`, `has(to_many,filter)`, `not(filter)`, `and(f1,f2,...)`, `or(f1,f2,...)`. Strings are quoted with `'` (doubled to escape), numbers, `true`, `false`, `null` are unquoted, an unquoted name is another attribute, dotted paths follow to-one relationships and dict attributes.
+- Filter syntax errors return 422, unknown attributes or incompatible types return 400 (`FilterError` when calling `model.match` directly).
+- `flatten_resource` and `extract_relationship` read JSON:API documents back into dicts or resources; `JapydClient` is a minimal HTTP client returning `SingleResourceTopLevel` / `MultiResourcesTopLevel`.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/gdoumenc/japyd/main/README.md): features, serialization, deserialization and filtering syntax with examples
+- [JsonApiDotNetCore filtering](https://www.jsonapi.net/usage/reading/filtering.html): reference of the filter syntax japyd follows
+- [JSON:API specification](https://jsonapi.org/format/): the document structure japyd produces
+
+## Source
+
+- [jsonapi.py](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/jsonapi.py): JSON:API document models (TopLevel, Resource, Relationship, Error), Flask extension `JsonApiApp`, `flatten_resource`, `extract_relationship`
+- [models.py](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/models.py): `JsonApiBaseModel` (Pydantic to JSON:API conversion, attribute resolution and filter matching)
+- [dotnet.py](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/dotnet.py): `JsonApiQueryModel` (query parameter parsing, filter parser, pagination, responses)
+- [filter.py](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/filter.py): filter operators `Oper` and `FilterError`
+
+## Optional
+
+- [Tests](https://github.com/gdoumenc/japyd/tree/main/tests): usage examples for every feature
+- [PyPI](https://pypi.org/project/japyd/): releases

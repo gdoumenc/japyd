@@ -1,22 +1,57 @@
 [project]
 name = "japyd"
-version = "1.1.22"
-description = "Automate JSON:API management in Flask. No manual mapping, just clean code."
+version = "1.1.23"
+description = "JSON:API server toolkit for Flask and Pydantic: automatic relationships, JsonApiDotNetCore filter syntax, pagination and errors."
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },
 ]
 requires-python = ">=3.11"
 readme = "README.md"
 license = { text = "MIT" }
+keywords = [
+    "jsonapi",
+    "json-api",
+    "json:api",
+    "pydantic",
+    "flask",
+    "rest",
+    "api",
+    "serialization",
+    "filtering",
+    "jsonapidotnetcore",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Framework :: Flask",
+    "Framework :: Pydantic :: 2",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 
 dependencies = [
     "flask",
     "flask-pydantic>=0.13.1",
-    "twine",
+    "requests",
 ]
+
+[project.urls]
+Homepage = "https://github.com/gdoumenc/japyd"
+Documentation = "https://github.com/gdoumenc/japyd#readme"
+Repository = "https://github.com/gdoumenc/japyd"
+Issues = "https://github.com/gdoumenc/japyd/issues"
 
 [project.optional-dependencies]
 dev = [
+    "twine",
     "pytest>=8.4.1",
     "mypy>=1.17.1",
     "ruff>=0.12.7",

@@ -210,6 +210,52 @@ class TestQuery:
         assert "same1" in r.data[0].attributes
         assert "same2" in r.data[0].attributes
 
+    def test_flatten_without_include(self):
+        same1 = ContentObject.SameObject(id="same1", test="test1")
+        same2 = ContentObject.SameObject(id="same2", test="test2")
+        content = ContentObject(id="object1", same1=same1, same2=same2)
+
+        query = JsonApiQueryModel(flatten="same1,same2")
+        assert query.include == {"same1", "same2"}
+        r = query.one(content)
+        assert r.data is not None
+        assert r.data.attributes["same1"]["test"] == "test1"
+        assert r.data.attributes["same2"]["test"] == "test2"
+        assert r.included == []
+
+        r = query.paginate([content])
+        assert r.data[0].attributes["same1"]["test"] == "test1"
+        assert r.included == []
+
+    def test_flatten_removed_from_included(self):
+        same1 = ContentObject.SameObject(id="same1", test="test1")
+        same2 = ContentObject.SameObject(id="same2", test="test2")
+        content = ContentObject(id="object1", same1=same1, same2=same2)
+
+        query = JsonApiQueryModel(include=["same2"], flatten="same1")
+        r = query.one(content)
+        assert r.data is not None
+        assert r.data.attributes["same1"]["test"] == "test1"
+        assert [(i.type, i.id) for i in r.included] == [(same2.jsonapi_type, "same2")]
+
+        r = query.paginate([content])
+        assert [(i.type, i.id) for i in r.included] == [(same2.jsonapi_type, "same2")]
+
+    def test_include_strip(self):
+        assert JsonApiQueryModel(include=[" same1 , same2,,"]).include == {"same1", "same2"}
+        assert JsonApiQueryModel(include={" same1"}).include == {"same1"}
+
+    def test_flatten_include_paths(self):
+        query = JsonApiQueryModel(include=["tenant"], flatten="order.lines.product|product_page?,customer?")
+        assert query.include == {
+            "tenant",
+            "order",
+            "order.lines",
+            "order.lines.product",
+            "order.lines.product_page",
+            "customer",
+        }
+
 
 class TestBody:
 

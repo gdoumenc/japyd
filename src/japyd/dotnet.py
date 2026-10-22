@@ -174,7 +174,7 @@ class JsonApiQueryModel(BaseModel):
         if self.flatten:
             flat_dict = flatten_resource(data, toplevel=res, pattern=self.flatten)
             flat_res = Resource(type=flat_dict.pop("type"), id=flat_dict.pop("id"), attributes=flat_dict)
-            return SingleResourceTopLevel(data=flat_res, included=included, meta=meta)
+            return SingleResourceTopLevel(data=flat_res, included=self._unflattened_included([value]), meta=meta)
 
         return res
 
@@ -230,7 +230,7 @@ class JsonApiQueryModel(BaseModel):
         if self.flatten:
             flat_list = flatten_resource(resources, toplevel=res, pattern=self.flatten)
             flat_res = [Resource(type=d.pop("type"), id=d.pop("id"), attributes=d) for d in flat_list]
-            return MultiResourcesTopLevel(data=flat_res, included=included, meta=meta)
+            return MultiResourcesTopLevel(data=flat_res, included=self._unflattened_included(data), meta=meta)
 
         return res
 
@@ -296,9 +296,49 @@ class JsonApiQueryModel(BaseModel):
     @field_validator("include", mode="before")
     @classmethod
     def parse_include(cls, include: set[str] | list[str] | None) -> set[str]:
-        if isinstance(include, set):
-            return include
-        return set(include[0].split(",")) if include else set()
+        if not include:
+            return set()
+        values = include if isinstance(include, set) else include[0].split(",")
+        return {v.strip() for v in values if v.strip()}
+
+    @model_validator(mode="after")
+    def _include_flatten(self) -> JsonApiQueryModel:
+        """Adds the flattened relationships to the include set, as flattening needs the included resources."""
+        self.include.update(self.flatten_paths)
+        return self
+
+    @property
+    def flatten_paths(self) -> set[str]:
+        """Returns the relationship paths defined in flatten, with all their prefixes.
+
+        'order.lines.product|page?' gives 'order', 'order.lines', 'order.lines.product' and 'order.lines.page'.
+        """
+        paths: set[str] = set()
+        if not self.flatten:
+            return paths
+        for pattern in self.flatten.split(","):
+            *firsts, lasts = [p.strip() for p in pattern.split(".")]
+            path = ""
+            for rel in firsts:
+                path = f"{path}.{rel.rstrip('?')}" if path else rel.rstrip("?")
+                paths.add(path)
+            for rel in lasts.split("|"):
+                rel = rel.strip().rstrip("?")
+                if rel:
+                    paths.add(f"{path}.{rel}" if path else rel)
+        return paths
+
+    def _unflattened_included(self, values: t.Iterable[t.Any]) -> list[Resource]:
+        """Returns the included resources without the flattened ones, already merged in the attributes."""
+        flatten_paths = self.flatten_paths
+        include = {i for i in self.include if not any(i == p or i.startswith(f"{p}.") for p in flatten_paths)}
+        included: list[Resource] = []
+        if include:
+            query = self.model_copy(update={"include": include, "flatten": None})
+            for value in values:
+                if isinstance(value, JsonApiBaseModel):
+                    value.as_resource(included, query)
+        return included
 
     @property
     def query_pagination(self) -> JsonApiPagination:

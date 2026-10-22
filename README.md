@@ -47,6 +47,9 @@ It provides a set of utilities to facilitate the creation, manipulation, and val
 - Pagination: page[number]=1&page[size]=10
 - Sparse Fieldsets: fields[articles]=title,author
 - Inclusion: include=author,comments
+- Flattening (japyd extension): flatten=author,comments.user merges the relationships into the attributes; the
+  flattened relationships and their parent paths are added to `include` automatically, and removed from `included`
+  in the response as they are already in the attributes
 
 ### Flask Extension for JSON:API Response Formatting
 

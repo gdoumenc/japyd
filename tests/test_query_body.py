@@ -238,8 +238,15 @@ class TestQuery:
         assert r.data.attributes["same1"]["test"] == "test1"
         assert [(i.type, i.id) for i in r.included] == [(same2.jsonapi_type, "same2")]
 
+        assert r.data.relationships is not None
+        assert "same1" not in r.data.relationships
+        assert r.data.relationships["same2"].data.id == "same2"
+
         r = query.paginate([content])
         assert [(i.type, i.id) for i in r.included] == [(same2.jsonapi_type, "same2")]
+        assert r.data[0].relationships is not None
+        assert "same1" not in r.data[0].relationships
+        assert r.data[0].relationships["same2"].data.id == "same2"
 
     def test_include_strip(self):
         assert JsonApiQueryModel(include=[" same1 , same2,,"]).include == {"same1", "same2"}

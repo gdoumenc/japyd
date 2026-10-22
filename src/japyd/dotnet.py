@@ -172,8 +172,7 @@ class JsonApiQueryModel(BaseModel):
         res = SingleResourceTopLevel(data=data, included=included, meta=meta)
 
         if self.flatten:
-            flat_dict = flatten_resource(data, toplevel=res, pattern=self.flatten)
-            flat_res = Resource(type=flat_dict.pop("type"), id=flat_dict.pop("id"), attributes=flat_dict)
+            flat_res = self._flat_resource(data, flatten_resource(data, toplevel=res, pattern=self.flatten))
             return SingleResourceTopLevel(data=flat_res, included=self._unflattened_included([value]), meta=meta)
 
         return res
@@ -229,7 +228,7 @@ class JsonApiQueryModel(BaseModel):
         res = MultiResourcesTopLevel(data=resources, included=included, meta=meta)
         if self.flatten:
             flat_list = flatten_resource(resources, toplevel=res, pattern=self.flatten)
-            flat_res = [Resource(type=d.pop("type"), id=d.pop("id"), attributes=d) for d in flat_list]
+            flat_res = [self._flat_resource(r, d) for r, d in zip(resources, flat_list, strict=True)]
             return MultiResourcesTopLevel(data=flat_res, included=self._unflattened_included(data), meta=meta)
 
         return res
@@ -327,6 +326,19 @@ class JsonApiQueryModel(BaseModel):
                 if rel:
                     paths.add(f"{path}.{rel}" if path else rel)
         return paths
+
+    def _flat_resource(self, res: Resource, flat: dict) -> Resource:
+        """Returns the flattened resource, keeping the relationships not merged in the attributes."""
+        flattened = {p.split(".")[0] for p in self.flatten_paths}
+        relationships = {k: v for k, v in (res.relationships or {}).items() if k not in flattened}
+        return Resource(
+            type=flat.pop("type"),
+            id=flat.pop("id"),
+            attributes=flat,
+            relationships=relationships or None,
+            links=res.links,
+            meta=res.meta,
+        )
 
     def _unflattened_included(self, values: t.Iterable[t.Any]) -> list[Resource]:
         """Returns the included resources without the flattened ones, already merged in the attributes."""

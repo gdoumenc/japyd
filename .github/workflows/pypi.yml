@@ -22,7 +22,12 @@ jobs:
       - name: Check version not yet published
         id: version_check
         run: |
-          VERSION=$(pdm show --version)
+          # Read from pyproject.toml, as the 'pdm show --version' output depends on the pdm version
+          VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ -z "$VERSION" ]; then
+            echo "Cannot read the version from pyproject.toml"
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/japyd/$VERSION/json")
           echo "PyPI status for $VERSION: $STATUS"

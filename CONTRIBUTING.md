@@ -45,7 +45,7 @@ By participating, you agree to uphold our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 3. **Install dependencies**:
    ```bash
-   pip install -e .[dev]
+   pdm install -G dev        # or, with pip >= 25.1: pip install -e . --group dev
    ```
 
 4. **Run tests**:

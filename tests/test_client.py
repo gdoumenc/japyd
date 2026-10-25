@@ -42,6 +42,8 @@ def get_order_id(order_id, query: JsonApiQueryModel):
 
 
 def mocked_requests_get(*args, **kwargs):
+    assert kwargs.pop("timeout") == 30
+    assert kwargs["headers"]["Accept"] == "application/vnd.api+json"
     with app.test_client() as client:
         value = client.get(*args[1:], **kwargs)
 

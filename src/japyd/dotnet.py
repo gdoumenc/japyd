@@ -5,7 +5,7 @@ import typing as t
 import warnings
 from http import HTTPStatus
 
-from flask import Response, request
+from flask import Response, has_request_context, request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from werkzeug.exceptions import (
     BadRequest,
@@ -31,7 +31,6 @@ NUMERIC_REGEXP = r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"
 # Any character except the filter syntax delimiters, to allow keys like 'gmp+' in a JSON attribute
 IDENTIFIER_REGEXP = r"([^\s(),']+)"
 KEYWORD_VALUES: dict[str, bool | None] = {"null": None, "true": True, "false": False}
-QUOTED_REGEXP = r"('[^']|'')*'"
 VALUE_REGEXP = rf"(?P<value>'([^']|'')*')|(?P<numeric>{NUMERIC_REGEXP})|(?P<other_attr>{IDENTIFIER_REGEXP})"
 OPER_REGEXP = (
     rf"({Oper.EQUALS}|{Oper.LESS_THAN}"
@@ -53,10 +52,13 @@ LOGICAL_REGEXP = rf"^\s*(?P<oper>{Oper.NOT}|{Oper.OR}|{Oper.AND}|{Oper.HAS})\s*[
 COMPILED_LOGICAL_REGEXP = re.compile(LOGICAL_REGEXP)
 COMPILED_IDENTIFIER_REGEXP = re.compile(IDENTIFIER_REGEXP)
 
+# Maximum nesting of logical operators, to avoid a recursion error on a malicious filter
+MAX_FILTER_DEPTH = 32
+
 
 class JsonApiPagination(BaseModel):
-    number: int = 1
-    size: int = 20
+    number: int = Field(default=1, ge=1)
+    size: int = Field(default=20, ge=1)
     total: int | None = None
 
 
@@ -149,6 +151,41 @@ class JsonApiQueryModel(BaseModel):
             raise BadRequest(str(e)) from e
         return True
 
+    def sort_values(self, values: t.Iterable[JsonApiBaseModel]) -> list[JsonApiBaseModel]:
+        """Returns the values sorted as defined by the sort parameter: sort=-created,title.
+
+        As JsonApiDotNetCore, a '-' prefix sorts descending, and null values are lower than any other value.
+        Raises BadRequest if an attribute is unknown or the values cannot be compared.
+        """
+        result = list(values)
+        if not self.sort:
+            return result
+
+        keys = [k.strip() for k in self.sort.split(",")]
+        if any(not k or k == "-" for k in keys):
+            raise UnprocessableEntity(f"Wrong sort parameters: {self.sort}")
+
+        # Stable sorts applied from the last key to the first one
+        try:
+            for key in reversed(keys):
+                descending = key.startswith("-")
+                attr = key[1:] if descending else key
+
+                def sort_key(model: JsonApiBaseModel, attr: str = attr) -> tuple[bool, t.Any]:
+                    value = model.resolve_attr(attr)
+                    return value is not None, value
+
+                result.sort(key=sort_key, reverse=descending)
+        except FilterError as e:
+            raise BadRequest(str(e)) from e
+        except TypeError as e:
+            raise BadRequest(f"Cannot sort on {self.sort}: {e}") from e
+        return result
+
+    def select(self, values: t.Iterable[JsonApiBaseModel]) -> list[JsonApiBaseModel]:
+        """Returns the values matching the filters, sorted as defined by the sort parameter."""
+        return self.sort_values(v for v in values if self.match(v))
+
     @staticmethod
     def no_content() -> Response:
         """Returns a no content response."""
@@ -168,12 +205,14 @@ class JsonApiQueryModel(BaseModel):
         elif isinstance(value, Resource):
             data = value
         else:
-            data = Resource(id=value.pop("id", ""), type=value.pop("type", ""), attributes=value)
-        res = SingleResourceTopLevel(data=data, included=included, meta=meta)
+            attributes = {k: v for k, v in value.items() if k not in ("id", "type")}
+            data = Resource(id=value.get("id", ""), type=value.get("type", ""), attributes=attributes)
+        res = SingleResourceTopLevel(data=data, included=included or None, meta=meta)
 
         if self.flatten:
             flat_res = self._flat_resource(data, flatten_resource(data, toplevel=res, pattern=self.flatten))
-            return SingleResourceTopLevel(data=flat_res, included=self._unflattened_included([value]), meta=meta)
+            included = self._unflattened_included([value])
+            return SingleResourceTopLevel(data=flat_res, included=included or None, meta=meta)
 
         return res
 
@@ -203,7 +242,7 @@ class JsonApiQueryModel(BaseModel):
         if full_list:
             data = values[start:end]
             has_next = end < len(values)
-            total = len(data)
+            total = len(values)
         else:
             if self.pagination.size < len(values):
                 raise InternalServerError("The pagination size was not respected.")
@@ -225,11 +264,12 @@ class JsonApiQueryModel(BaseModel):
             meta["count"] = total
 
         resources: list[Resource] = [d if isinstance(d, Resource) else d.as_resource(included, self) for d in data]
-        res = MultiResourcesTopLevel(data=resources, included=included, meta=meta)
+        res = MultiResourcesTopLevel(data=resources, included=included or None, meta=meta)
         if self.flatten:
             flat_list = flatten_resource(resources, toplevel=res, pattern=self.flatten)
             flat_res = [self._flat_resource(r, d) for r, d in zip(resources, flat_list, strict=True)]
-            return MultiResourcesTopLevel(data=flat_res, included=self._unflattened_included(data), meta=meta)
+            included = self._unflattened_included(data)
+            return MultiResourcesTopLevel(data=flat_res, included=included or None, meta=meta)
 
         return res
 
@@ -277,18 +317,17 @@ class JsonApiQueryModel(BaseModel):
         if fields:
             data["fields"] = fields
 
-        # Populate pagination from request.args if not provided
+        # Pagination defined as page[number] and page[size] query arguments, or in the request if built manually
         if "pagination" not in data:
-            try:
-                page = request.args.get("page[number]")
-                size = request.args.get("page[size]")
-                if page or size:
-                    data["pagination"] = {
-                        "number": int(page) if page else 1,
-                        "size": int(size) if size else 20,
-                    }
-            except RuntimeError:
-                pass  # No Flask context
+            args = data if "page[number]" in data or "page[size]" in data else {}
+            if not args and has_request_context():
+                args = request.args
+            pagination = {}
+            for key, arg in (("number", "page[number]"), ("size", "page[size]")):
+                if args.get(arg):
+                    pagination[key] = args[arg]
+            if pagination:
+                data["pagination"] = pagination
 
         return data
 
@@ -360,7 +399,9 @@ class JsonApiQueryModel(BaseModel):
         return self.pagination
 
     @classmethod
-    def _parse_filter(cls, filter: str) -> JsonApiQueryFilter:
+    def _parse_filter(cls, filter: str, depth: int = 0) -> JsonApiQueryFilter:
+        if depth > MAX_FILTER_DEPTH:
+            raise UnprocessableEntity(f"Wrong filter parameters: more than {MAX_FILTER_DEPTH} nested operators")
         if reg := COMPILED_FILTER_REGEXP.match(filter):
             oper = reg.group("oper")
             if oper:
@@ -379,11 +420,12 @@ class JsonApiQueryModel(BaseModel):
             args = _split_arguments(reg.group("args"))
             if args is not None:
                 if oper == Oper.NOT and len(args) == 1:
-                    return JsonApiQueryFilter(oper=oper, subfilter=cls._parse_filter(args[0]))
+                    return JsonApiQueryFilter(oper=oper, subfilter=cls._parse_filter(args[0], depth + 1))
                 if oper in (Oper.OR, Oper.AND) and len(args) >= 2:
-                    return JsonApiQueryFilter(oper=oper, subfilter=tuple(cls._parse_filter(arg) for arg in args))
+                    subfilters = tuple(cls._parse_filter(arg, depth + 1) for arg in args)
+                    return JsonApiQueryFilter(oper=oper, subfilter=subfilters)
                 if oper == Oper.HAS and len(args) in (1, 2) and COMPILED_IDENTIFIER_REGEXP.fullmatch(args[0]):
-                    subfilter = cls._parse_filter(args[1]) if len(args) == 2 else None
+                    subfilter = cls._parse_filter(args[1], depth + 1) if len(args) == 2 else None
                     return JsonApiQueryFilter(oper=oper, attr=args[0], subfilter=subfilter)
         msg = f"Wrong filter parameters: {filter}"
         raise UnprocessableEntity(msg)
@@ -392,7 +434,7 @@ class JsonApiQueryModel(BaseModel):
     def _parse_value(cls, reg):
         numeric = reg.group("numeric")
         if numeric:
-            value = float(numeric) if "." in numeric else int(numeric)
+            value = _to_numeric(numeric)
         else:
             value = reg.group("value")
             if value:
@@ -434,4 +476,12 @@ def _split_arguments(args: str) -> list[str] | None:
 def _to_string_or_numeric(value: str) -> str | int | float:
     if value.startswith("'"):
         return value[1:-1].replace("''", "'")
-    return float(value) if "." in value else int(value)
+    return _to_numeric(value)
+
+
+def _to_numeric(value: str) -> int | float:
+    """Converts a numeric literal, a decimal point or an exponent giving a float: 1.5, 1e5."""
+    try:
+        return int(value)
+    except ValueError:
+        return float(value)

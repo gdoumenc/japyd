@@ -9,6 +9,7 @@ from japyd import (
     TopLevel,
     extract_from_resource_identifier,
     extract_relationship,
+    flatten_resource,
 )
 
 
@@ -134,3 +135,40 @@ class TestJsonApi:
         authors = extract_relationship(toplevel, "author")
         assert isinstance(authors, list)
         assert len(authors) == 2
+
+
+class TestConsistency:
+
+    def test_null_to_one_relationship(self):
+        doc = {
+            "data": {"type": "article", "id": "1", "relationships": {"author": {"data": None}}},
+            "included": [],
+        }
+        toplevel = SingleResourceTopLevel.model_validate(doc)
+        assert toplevel.data is not None
+        assert toplevel.data.relationships is not None
+        assert toplevel.data.relationships["author"].data is None
+        assert extract_relationship(toplevel, "author") is None
+        assert extract_relationship(doc, "author") is None
+        assert flatten_resource(toplevel, pattern="author")["author"] is None
+
+    def test_extract_list_from_dict(self, articles):
+        authors = extract_relationship(articles, "author")
+        assert isinstance(authors, list)
+        assert all(isinstance(a, dict) for a in authors)
+
+    def test_flatten_empty_list(self):
+        assert flatten_resource([]) == []
+        assert flatten_resource(MultiResourcesTopLevel()) == []
+
+    def test_resource_without_id(self):
+        res = Resource.model_validate({"type": "article", "lid": "new-1", "attributes": {"title": "t"}})
+        assert res.id == ""
+        assert res.lid == "new-1"
+
+    def test_error_without_code(self):
+        toplevel, code, _ = TopLevel.error(title="t", detail="d")
+        assert code == 500
+        assert toplevel.errors is not None
+        assert toplevel.errors[0].id is None
+        assert toplevel.errors[0].status == "500"

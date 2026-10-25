@@ -4,7 +4,11 @@ import typing as t
 
 from flask import Flask, Response, make_response, request
 from pydantic import AnyUrl, BaseModel, ConfigDict, Field, model_validator
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, InternalServerError
+
+
+class ResourceTypeError(ValueError):
+    """The resource type does not match the expected one, converted to 409 Conflict by JsonApiApp."""
 
 
 class Link(BaseModel):
@@ -34,14 +38,17 @@ class ResourceIdentifier(BaseModel):
 
 
 class Relationship(BaseModel):
-    data: ResourceIdentifier | list[ResourceIdentifier] = Field(default_factory=list)
+    # None for an empty to-one relationship
+    data: ResourceIdentifier | list[ResourceIdentifier] | None = Field(default_factory=list)
     links: dict[str, AnyUrl | Link | None] | None = None
     meta: dict | None = None
 
 
 class Resource(BaseModel):
     type: str
-    id: str
+    # The id may be missing in a creation request, the lid then identifies the resource in the request document
+    id: str = ""
+    lid: str | None = None
     attributes: dict = Field(default_factory=dict)
     relationships: dict[str, Relationship] | None = None
     links: dict[str, AnyUrl | Link | None] | None = None
@@ -68,7 +75,7 @@ class TopLevel(BaseModel):
     def error(
         cls, *, code: int | None = None, title: str, detail: str, status: str | None = None
     ) -> tuple[TopLevel, int, dict]:
-        errors = [Error(id=str(code), title=title, detail=detail, status=status or str(code))]
+        errors = [Error(id=str(code) if code else None, title=title, detail=detail, status=status or str(code or 500))]
         return TopLevel(errors=errors), code or 500, {"Content-Type": "application/vnd.api+json"}
 
 
@@ -114,14 +121,13 @@ class _JsonApiBodyModel(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def parse_template(cls, data: dict) -> dict:
-        if "toplevel" in data:
-            data.update(data.pop("toplevel"))
+    def parse_template(cls, data: t.Any) -> t.Any:
+        if isinstance(data, dict) and "toplevel" in data:
+            return {**{k: v for k, v in data.items() if k != "toplevel"}, **data["toplevel"]}
         return data
 
 
 class JsonApiBodyModel(_JsonApiBodyModel):
-    included: list[Resource] | None = Field(default_factory=list)
 
     @property
     def attributes(self) -> dict[str, t.Any] | list[dict[str, t.Any]]:
@@ -203,10 +209,22 @@ class JsonApiApp:
                 status_code = str(e.code or 500)
                 title = e.name
                 detail = e.description or str(e)
-            else:
-                status_code = "500"
-                title = type(e).__name__
+            elif isinstance(e, ResourceTypeError):
+                # As the JSON:API specification for a type not matching the endpoint
+                status_code = "409"
+                title = "Conflict"
                 detail = str(e)
+            else:
+                # The handler on Exception prevents Flask from logging the unhandled exception
+                app.logger.exception("Exception on %s [%s]", request.path, request.method)
+                status_code = "500"
+                if app.debug or app.config.get("JSONAPI_EXPOSE_ERRORS", False):
+                    title = type(e).__name__
+                    detail = str(e)
+                else:
+                    server_error = InternalServerError()
+                    title = server_error.name
+                    detail = server_error.description or ""
 
             error = Error(id=status_code, title=title, detail=detail, status=status_code)
             toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)
@@ -215,7 +233,8 @@ class JsonApiApp:
         app.error_handler_spec[None][None][Exception] = _handle_exception
 
     def _change_content_type(self, resp: Response) -> Response:
-        if "application/vnd.api+json" not in request.headers.getlist("accept"):
+        # Exact match, as a wildcard accept like */* must not change the content type
+        if "application/vnd.api+json" not in request.accept_mimetypes.values():
             return resp
 
         resp.content_type = "application/vnd.api+json"
@@ -223,36 +242,37 @@ class JsonApiApp:
 
 
 @t.overload
-def extract_relationship(data: dict | str, relationship: str) -> list[dict] | dict:
-    """Extracts from dict or a JSON string. Relationship string may be composed with '.' to extract nested relationships."""
+def extract_relationship(data: dict | str, relationship: str) -> list[dict] | dict | None:
+    ...
 
 
 @t.overload
-def extract_relationship(data: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource:
-    """Extracts from a TopLevel model. Relationship string may be composed with '.' to extract nested relationships."""
+def extract_relationship(data: TopLevel, relationship: Relationship | str) -> list[Resource] | Resource | None:
+    ...
 
 
 @t.overload
-def extract_relationship(data: SingleBodyModel, relationship: Relationship | str) -> Resource:
-    """Extracts from a JsonApiBodyModel as a single resource. Relationship string may be composed with '.' to extract nested relationships."""
+def extract_relationship(data: SingleBodyModel, relationship: Relationship | str) -> Resource | None:
+    ...
 
 
 @t.overload
 def extract_relationship(data: MultiBodyModel, relationship: Relationship | str) -> list[Resource]:
-    """Extracts from a JsonApiBodyModel as a multiple resource. Relationship string may be composed with '.' to extract nested relationships."""
+    ...
 
 
-def extract_relationship(data, relationship: Relationship | str) -> list[Resource] | Resource | list[dict] | dict:
+def extract_relationship(
+    data, relationship: Relationship | str
+) -> list[Resource] | Resource | list[dict] | dict | None:
     """Returns the resource associated with the relationship if defined in included.
 
-    :param toplevel: The toplevel jsonapi structure.
+    Returns None for an empty to-one relationship, and dicts if the data is given as a dict or a JSON string.
+
+    :param data: The toplevel jsonapi structure, as a model, a dict or a JSON string.
     :param relationship: The relationship to extract or the relationship path to extract.
                          Relationship string may be composed with '.' to extract nested relationships.
     """
-    if isinstance(data, (dict, str)):
-        _data = _to_toplevel(data)
-    else:
-        _data = data
+    _data = _to_toplevel(data) if isinstance(data, (dict, str)) else data
 
     if isinstance(relationship, str):
         identifiers = get_relation_identifiers(_data, _data.data, relationship)
@@ -261,16 +281,21 @@ def extract_relationship(data, relationship: Relationship | str) -> list[Resourc
     else:
         raise TypeError(f"Wrong relationship structure : {type(relationship)}.")
 
+    as_dict = isinstance(data, (dict, str))
     if isinstance(identifiers, list):
         # Set in dictionary to avoid duplicate
-        resources: dict[str, Resource] = {}
+        resources: dict[tuple[str, str], Resource] = {}
         for ident in identifiers:
             res = extract_from_resource_identifier(_data, ident)
-            resources[f"{res.type}{res.id}"] = res
+            resources[(res.type, res.id)] = res
+        if as_dict:
+            return [r.model_dump() for r in resources.values()]
         return list(resources.values())
 
-    res = extract_from_resource_identifier(_data, t.cast(ResourceIdentifier, identifiers))
-    if isinstance(data, (dict, str)):
+    if identifiers is None:
+        return None
+    res = extract_from_resource_identifier(_data, identifiers)
+    if as_dict:
         return res.model_dump()
     return res
 
@@ -319,11 +344,11 @@ def flatten_resource(
     else:
         data = res
 
-    if not data:
-        return {}
-
     if isinstance(data, list):
         return [flatten_resource(r, toplevel=toplevel, pattern=pattern) for r in data]  # type: ignore
+
+    if not data:
+        return {}
 
     if not pattern:
         return {"type": data.type, "id": data.id, **data.attributes}
@@ -361,30 +386,30 @@ def extract_from_resource_identifier(
     raise AttributeError(f"Cannot extract identifier {ident} from {tl}")
 
 
-def get_relation_identifiers(toplevel, data, relationship: str) -> ResourceIdentifier | list[ResourceIdentifier]:
+def get_relation_identifiers(
+    toplevel, data, relationship: str
+) -> ResourceIdentifier | list[ResourceIdentifier] | None:
     if isinstance(data, list):
-        flat_list = []
+        flat_list: list[ResourceIdentifier] = []
         for d in data:
-            rel = d.relationships[relationship].data
-            flat_list.extend(rel) if isinstance(rel, list) else flat_list.append(rel)
+            rel = get_relation_identifiers(toplevel, d, relationship)
+            if isinstance(rel, list):
+                flat_list.extend(rel)
+            elif rel is not None:
+                flat_list.append(rel)
         return flat_list
 
     if "." not in relationship:
-        if relationship not in data.relationships:
+        if not data.relationships or relationship not in data.relationships:
             raise AttributeError(f"Cannot extract relationship {relationship} from {toplevel}")
         return data.relationships[relationship].data
 
     # Composed relationships
     *first, last = relationship.split(".")
     res = extract_relationship(toplevel, ".".join(first))
-    if isinstance(res, list):
-        flat_list = []
-        for r in res:
-            rel = get_relation_identifiers(toplevel, r, last)
-            flat_list.extend(rel) if isinstance(rel, list) else flat_list.append(rel)
-        return flat_list
-    else:
-        return get_relation_identifiers(toplevel, res, last)
+    if res is None:
+        return None
+    return get_relation_identifiers(toplevel, res, last)
 
 
 def _to_toplevel(toplevel) -> TopLevel:
@@ -429,6 +454,8 @@ def _flatten_resource(
                 _flatten_resource(toplevel, extracted, frel, *lasts.split(".", 1))
             else:
                 _add_flatten_relationship(toplevel, extracted, frel, lasts)
+    elif current_rel.data is None:
+        current_flatten[first] = None
     else:
         extracted = extract_from_resource_identifier(toplevel, current_rel.data)
         frel = flatten_resource(extracted)
@@ -465,5 +492,7 @@ def _add_flatten_relationship(
     rel = res.relationships[relationship]
     if isinstance(rel.data, list):
         flatten[relationship] = [flatten_resource(extract_from_resource_identifier(toplevel, r)) for r in rel.data]
+    elif rel.data is None:
+        flatten[relationship] = None
     else:
         flatten[relationship] = flatten_resource(extract_from_resource_identifier(toplevel, rel.data))

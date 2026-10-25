@@ -2,7 +2,7 @@ name: PyPi
 
 on:
   push:
-    branches: 
+    branches:
       - main
 
 jobs:
@@ -10,30 +10,38 @@ jobs:
     name: upload release to PyPI
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # to push the release tag
       id-token: write
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-tags: true
-          fetch-depth: 0
 
       - uses: pdm-project/setup-pdm@v4
         with:
           python-version: 3.12
-            
-      - name: Trace last version
-        run: echo $(git describe --tags --abbrev=0)
 
-      - name: Check version change
+      - name: Check version not yet published
         id: version_check
         run: |
-          LAST_VERSION=$(git describe --tags --abbrev=0)
-          CURRENT_VERSION=$(pdm show --version)
-          if [ "$LAST_VERSION" != "$CURRENT_VERSION" ]; then
+          VERSION=$(pdm show --version)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/japyd/$VERSION/json")
+          echo "PyPI status for $VERSION: $STATUS"
+          if [ "$STATUS" = "404" ]; then
             echo "version_changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Publish to PyPI
-        run: pdm publish
+      - name: Run tests
         if: steps.version_check.outputs.version_changed == 'true'
+        run: |
+          pdm install -G dev
+          pdm run tests
+
+      - name: Publish to PyPI
+        if: steps.version_check.outputs.version_changed == 'true'
+        run: pdm publish
+
+      - name: Tag the release
+        if: steps.version_check.outputs.version_changed == 'true'
+        run: |
+          git tag "v${{ steps.version_check.outputs.version }}"
+          git push origin "v${{ steps.version_check.outputs.version }}"

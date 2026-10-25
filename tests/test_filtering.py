@@ -1,4 +1,7 @@
+import datetime
 import typing as t
+from decimal import Decimal
+from enum import StrEnum
 
 import pytest
 from flask import Flask, request
@@ -305,6 +308,18 @@ class TestFilter:
         filter = JsonApiQueryModel.model_validate({"filter": "any(a,'x,y','O''Connor',3)"}).filters[0]
         assert filter.value == ["x,y", "O'Connor", 3]
 
+    @pytest.mark.parametrize(
+        "query_filter, value",
+        [("equals(a,1e5)", 1e5), ("equals(a,-2E-3)", -2e-3), ("equals(a,-12)", -12), ("any(a,1e2,3)", [100.0, 3])],
+    )
+    def test_parse_numbers(self, query_filter, value):
+        assert JsonApiQueryModel.model_validate({"filter": query_filter}).filters[0].value == value
+
+    def test_parse_too_nested(self):
+        JsonApiQueryModel.model_validate({"filter": "not(" * 30 + "equals(a,1)" + ")" * 30})
+        with pytest.raises(UnprocessableEntity):
+            JsonApiQueryModel.model_validate({"filter": "not(" * 2000 + "equals(a,1)" + ")" * 2000})
+
     def test_parse_filter_array(self, client):
         client.get("/", query_string={"filter[0]": "equals(attr1,0)", "filter[1]": "any(attr2, 'test', 'other')"})
         filters = list(request.query_params.filters)  # type: ignore
@@ -454,6 +469,11 @@ class LineModel(JsonApiBaseModel):
     quantity: int
 
 
+class Status(StrEnum):
+    OPEN = "open"
+    CLOSED = "closed"
+
+
 class MatchedModel(JsonApiBaseModel):
     jsonapi_type: t.ClassVar[str] = "matched"
     name: str = "Brian"
@@ -467,6 +487,10 @@ class MatchedModel(JsonApiBaseModel):
     secondary: LineModel | None = None
     comment: str | None = None
     tenant_data: dict = Field(default_factory=lambda: {"gmp+": True, "é-x/y": "Brian", "sub": {"key": 1}})
+    created: datetime.date = datetime.date(2025, 6, 15)
+    updated: datetime.datetime = datetime.datetime(2025, 6, 15, 10, 30)
+    price: Decimal = Decimal("12.50")
+    status: Status = Status.OPEN
 
 
 class TestMatch:
@@ -512,6 +536,19 @@ class TestMatch:
             ("and(equals(tenant_data.gmp+,true),any(tenant_data.é-x/y,'Dom','Brian'))", True),
             ("lessThan(notice,limit)", True),
             ("greaterThan(notice,limit)", False),
+            # The value is converted to the attribute type
+            ("greaterThan(created,'2025-01-01')", True),
+            ("lessThan(created,'2025-01-01')", False),
+            ("equals(created,'2025-06-15')", True),
+            ("any(created,'2024-01-01','2025-06-15')", True),
+            ("greaterOrEqual(updated,'2025-06-15T10:30:00')", True),
+            ("lessThan(updated,'2025-06-15T10:00:00')", False),
+            ("equals(price,'12.5')", True),
+            ("greaterThan(price,12)", True),
+            ("equals(status,'open')", True),
+            ("any(status,'closed')", False),
+            ("equals(status,'unknown')", False),
+            ("equals(notice,'10')", True),
         ],
     )
     def test_match(self, query_filter, expected):
@@ -557,10 +594,13 @@ class TestMatch:
             "equals(main.unknown,'a')",
             "equals(lines.id,'1')",  # to-many relationship must be filtered with has
             "equals(match,'a')",  # methods are not attributes
+            "equals(model_config.frozen,true)",  # pydantic internals are not attributes
+            "equals(__class__,'a')",
             "lessThan(name,5)",
             "startsWith(notice,'1')",
             "has(unknown)",
             "lessThan(notice,unknown)",
+            "greaterThan(created,'not a date')",
         ],
     )
     def test_match_wrong_attribute(self, query_filter):

@@ -40,6 +40,7 @@ classifiers = [
 dependencies = [
     "flask",
     "flask-pydantic>=0.13.1",
+    "pydantic>=2",
     "requests",
 ]
 
@@ -49,16 +50,12 @@ Documentation = "https://github.com/gdoumenc/japyd#readme"
 Repository = "https://github.com/gdoumenc/japyd"
 Issues = "https://github.com/gdoumenc/japyd/issues"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
-    "twine",
     "pytest>=8.4.1",
     "mypy>=1.17.1",
     "ruff>=0.12.7",
-    "cloudsmith-cli>=1.8.3",
-    "codecov>=2.1.13",
     "pytest-cov>=6.2.1",
-    "pip>=25.2",
     "types-requests>=2.31.0.6",
 ]
 
@@ -74,8 +71,8 @@ excludes = ["tests/"]
 
 [tool.pdm.scripts]
 ruff = { cmd = "ruff check src", help = "Linting using Ruff" }
-mypy = { cmd = "mypy src --exclude neorezo/biz", help = "Type checking using mypy" }
-pytest = { cmd = "pytest .", help = "Unit testing using pytest" }
+mypy = { cmd = "mypy src", help = "Type checking using mypy" }
+pytest = { cmd = "pytest . --cov=japyd --cov-report=xml", help = "Unit testing using pytest" }
 tests.composite = ["ruff", "mypy", "pytest"]
 
 [tool.pytest.ini_options]
@@ -85,14 +82,12 @@ markers = [
     "wip",
 ]
 
-[[tool.mypy.overrides]]
-module = ["jsonapi_pydantic.*"]
-follow_untyped_imports = true
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 
 [tool.ruff.format]
-quote-style = "single"
+quote-style = "double"
 indent-style = "space"
-
-[tool.isort]
-force-sort-within-sections = true
-split-on-trailing-comma = true

@@ -1,5 +1,6 @@
 import pytest
-from werkzeug.exceptions import InternalServerError
+from pydantic import ValidationError
+from werkzeug.exceptions import BadRequest, InternalServerError, UnprocessableEntity
 
 from japyd import (
     JsonApiBaseModel,
@@ -7,6 +8,7 @@ from japyd import (
     MultiBodyModel,
     MultiResourcesTopLevel,
     Resource,
+    ResourceIdentifier,
     SingleBodyModel,
     SingleResourceTopLevel,
     extract_relationship,
@@ -37,6 +39,19 @@ class TestQuery:
         assert fields is not None
         assert len(fields) == 2
         assert "same2" in fields
+
+    def test_include_resource_identifier(self):
+        class Holder(JsonApiBaseModel):
+            jsonapi_type = "holder"
+            id: str
+            same: ContentObject.SameObject | ResourceIdentifier
+
+        query = JsonApiQueryModel(include={"same"})
+        included: list[Resource] = []
+        r = Holder(id="1", same=ResourceIdentifier(type="same", id="2")).as_resource(included, query)
+        assert r.relationships is not None
+        assert r.relationships["same"].data == ResourceIdentifier(type="same", id="2")
+        assert included == []
 
     def test_not_included_twice(self):
         query = JsonApiQueryModel(include={"same1", " same2"})
@@ -105,7 +120,7 @@ class TestQuery:
 
         query = JsonApiQueryModel(pagination={"size": 10})
         toplevel = query.paginate(values)
-        assert toplevel.meta["count"] == 10
+        assert toplevel.meta["count"] == 20  # total number of values, not the page size
         assert toplevel.data[0].attributes["test"] == "1"
         assert toplevel.data[-1].attributes["test"] == "10"
         assert not toplevel.meta["pagination"]["has_prev"]
@@ -113,7 +128,7 @@ class TestQuery:
 
         query = JsonApiQueryModel(pagination={"number": 2, "size": 10})
         toplevel = query.paginate(values)
-        assert toplevel.meta["count"] == 10
+        assert toplevel.meta["count"] == 20
         assert toplevel.data[0].attributes["test"] == "11"
         assert toplevel.data[-1].attributes["test"] == "20"
         assert toplevel.meta["pagination"]["page"] == 2
@@ -221,11 +236,11 @@ class TestQuery:
         assert r.data is not None
         assert r.data.attributes["same1"]["test"] == "test1"
         assert r.data.attributes["same2"]["test"] == "test2"
-        assert r.included == []
+        assert r.included is None
 
         r = query.paginate([content])
         assert r.data[0].attributes["same1"]["test"] == "test1"
-        assert r.included == []
+        assert r.included is None
 
     def test_flatten_removed_from_included(self):
         same1 = ContentObject.SameObject(id="same1", test="test1")
@@ -288,3 +303,80 @@ class TestBody:
         
         assert len(body.included) == 5
         assert body.included[0].attributes["firstName"] == "Alice"
+
+
+class SortedModel(JsonApiBaseModel):
+    jsonapi_type = "sorted"
+    id: str
+    name: str
+    rank: int | None = None
+
+
+class TestFixes:
+
+    def test_one_does_not_change_the_value(self):
+        value = {"id": "1", "type": "t", "x": 1}
+        r = JsonApiQueryModel().one(value)
+        assert r.data is not None
+        assert r.data.id == "1"
+        assert r.data.attributes == {"x": 1}
+        assert value == {"id": "1", "type": "t", "x": 1}
+
+    @pytest.mark.parametrize("pagination", [{"number": 0}, {"size": 0}, {"number": -1, "size": -5}])
+    def test_wrong_pagination(self, pagination):
+        with pytest.raises(ValidationError):
+            JsonApiQueryModel(pagination=pagination)
+
+    def test_pagination_from_query_args(self):
+        query = JsonApiQueryModel.model_validate({"page[number]": "2", "page[size]": "5"})
+        assert query.pagination.number == 2
+        assert query.pagination.size == 5
+
+        with pytest.raises(ValidationError):
+            JsonApiQueryModel.model_validate({"page[number]": "x"})
+
+    def test_body_without_id(self):
+        body = SingleBodyModel.model_validate({"data": {"type": "content", "attributes": {"a": 1}}})
+        assert body.data is not None
+        assert body.data.id == ""
+        assert body.attributes == {"a": 1}
+
+    def test_sort(self):
+        values = [
+            SortedModel(id="1", name="b", rank=2),
+            SortedModel(id="2", name="a", rank=None),
+            SortedModel(id="3", name="c", rank=2),
+            SortedModel(id="4", name="a", rank=1),
+        ]
+        assert [v.id for v in JsonApiQueryModel().sort_values(values)] == ["1", "2", "3", "4"]
+        assert [v.id for v in JsonApiQueryModel(sort="name").sort_values(values)] == ["2", "4", "1", "3"]
+        assert [v.id for v in JsonApiQueryModel(sort="-name").sort_values(values)] == ["3", "1", "2", "4"]
+        # Null values are lower than any other value
+        assert [v.id for v in JsonApiQueryModel(sort="rank,-name").sort_values(values)] == ["2", "4", "3", "1"]
+        assert [v.id for v in JsonApiQueryModel(sort="-rank,name").sort_values(values)] == ["1", "3", "4", "2"]
+
+    def test_select(self):
+        values = [SortedModel(id=str(i), name=n) for i, n in enumerate("cab")]
+        query = JsonApiQueryModel(sort="name", filter="not(equals(name,'a'))")
+        assert [v.name for v in query.select(values)] == ["b", "c"]
+
+    @pytest.mark.parametrize("sort", ["unknown", "-unknown", "model_config"])
+    def test_sort_unknown_attribute(self, sort):
+        with pytest.raises(BadRequest):
+            JsonApiQueryModel(sort=sort).sort_values([SortedModel(id="1", name="a")])
+
+    @pytest.mark.parametrize("sort", ["name,", "-", ",name"])
+    def test_wrong_sort(self, sort):
+        with pytest.raises(UnprocessableEntity):
+            JsonApiQueryModel(sort=sort).sort_values([SortedModel(id="1", name="a")])
+
+    def test_empty_relationships_and_included_omitted(self):
+        r = JsonApiQueryModel().one(SortedModel(id="1", name="a"))
+        assert r.data is not None
+        assert r.data.relationships is None
+        assert r.included is None
+        assert "included" not in r.model_dump(exclude_none=True)
+
+        r = JsonApiQueryModel().paginate([SortedModel(id="1", name="a")])
+        assert r.data[0].relationships is None
+        assert r.included is None

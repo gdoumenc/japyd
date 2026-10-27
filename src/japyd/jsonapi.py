@@ -3,8 +3,22 @@ from __future__ import annotations
 import typing as t
 
 from flask import Flask, Response, make_response, request
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, model_validator
-from werkzeug.exceptions import HTTPException, InternalServerError
+from pydantic import (
+    AnyUrl,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+    model_validator,
+)
+from werkzeug.exceptions import HTTPException, InternalServerError, NotAcceptable, UnsupportedMediaType
+from werkzeug.http import parse_options_header
+
+JSONAPI_CONTENT_TYPE = "application/vnd.api+json"
+
+# No extension is supported, and the profiles may be ignored, so only the profile parameter is allowed
+SUPPORTED_MEDIA_TYPE_PARAMETERS = {"profile"}
 
 
 class ResourceTypeError(ValueError):
@@ -38,10 +52,25 @@ class ResourceIdentifier(BaseModel):
 
 
 class Relationship(BaseModel):
-    # None for an empty to-one relationship
-    data: ResourceIdentifier | list[ResourceIdentifier] | None = Field(default_factory=list)
+    # None for an empty to-one relationship, [] for an empty to-many, and the data may be absent (only links or meta)
+    data: ResourceIdentifier | list[ResourceIdentifier] | None = None
     links: dict[str, AnyUrl | Link | None] | None = None
     meta: dict | None = None
+
+    @property
+    def has_data(self) -> bool:
+        """Checks the resource linkage is given, as data null is an empty to-one relationship, not a missing one."""
+        return "data" in self.model_fields_set
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict:
+        dumped = handler(self)
+        if not self.has_data:
+            dumped.pop("data", None)
+        elif self.data is None:
+            # An empty to-one relationship is data null, which must be kept even with exclude_none
+            return {"data": None, **dumped}
+        return dumped
 
 
 class Resource(BaseModel):
@@ -66,25 +95,47 @@ class TopLevel(BaseModel):
     links: dict[str, AnyUrl | Link | None] | None = None
     included: list[Resource] | None = None
 
+    # The primary data is null for an empty single resource, kept on serialization even with exclude_none
+    keep_null_data: t.ClassVar[bool] = False
+
+    @model_validator(mode="after")
+    def _check_data_and_errors(self: t.Self):
+        if self.errors and self.data:
+            raise ValueError("The members data and errors MUST NOT coexist in a JSON:API document.")
+        return self
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler: SerializerFunctionWrapHandler) -> dict:
+        dumped = handler(self)
+        if self.errors:
+            # An error document has no primary data, and so no included resources
+            dumped.pop("data", None)
+            dumped.pop("included", None)
+        elif self.data is None and self.keep_null_data:
+            return {"data": None, **dumped}
+        return dumped
+
     @classmethod
     def http_error(cls, e: HTTPException) -> tuple[TopLevel, int, dict]:
         errors = [Error(id=str(e.code), title=e.name, detail=e.description, status=str(e.code))]
-        return TopLevel(errors=errors), e.code or 500, {"Content-Type": "application/vnd.api+json"}
+        return TopLevel(errors=errors), e.code or 500, {"Content-Type": JSONAPI_CONTENT_TYPE}
 
     @classmethod
     def error(
         cls, *, code: int | None = None, title: str, detail: str, status: str | None = None
     ) -> tuple[TopLevel, int, dict]:
         errors = [Error(id=str(code) if code else None, title=title, detail=detail, status=status or str(code or 500))]
-        return TopLevel(errors=errors), code or 500, {"Content-Type": "application/vnd.api+json"}
+        return TopLevel(errors=errors), code or 500, {"Content-Type": JSONAPI_CONTENT_TYPE}
 
 
 class SingleResourceTopLevel(TopLevel):
     data: Resource | None = None  # pyright: ignore[reportIncompatibleVariableOverride]
 
+    keep_null_data: t.ClassVar[bool] = True
+
     @model_validator(mode="after")
     def validate_data(self: t.Self):
-        if self.meta is None:
+        if self.meta is None and not self.errors:
             self.meta = {"count": 0 if self.data is None else 1}
         return self
 
@@ -100,7 +151,7 @@ class MultiResourcesTopLevel(TopLevel):
 
     @model_validator(mode="after")
     def validate_data(self: t.Self):
-        if self.meta is None:
+        if self.meta is None and not self.errors:
             self.meta = {"count": len(self.data)}
         return self
 
@@ -176,11 +227,13 @@ class JsonApiApp:
     def init_app(self, app: Flask):
         """
         - Adds exception handler to transform any exception to TopLevel error.
+        - Checks the JSON:API media type parameters: 415 on the request content type, 406 on the accept header.
         - Forces response content type to JSON:API.
         """
         self.app = app
 
         handle_exception = app.error_handler_spec[None][None].get(Exception)
+        app.before_request(self._check_media_types)
         app.after_request(self._change_content_type)
 
         def _handle_exception(e: Exception) -> Response:
@@ -228,17 +281,41 @@ class JsonApiApp:
 
             error = Error(id=status_code, title=title, detail=detail, status=status_code)
             toplevel = TopLevel(errors=[error]).model_dump_json(exclude_none=True)
-            return make_response(toplevel, status_code, {"Content-Type": "application/vnd.api+json"})
+            return make_response(toplevel, status_code, {"Content-Type": JSONAPI_CONTENT_TYPE})
 
         app.error_handler_spec[None][None][Exception] = _handle_exception
 
+    @staticmethod
+    def _check_media_types() -> None:
+        content_type = request.headers.get("Content-Type")
+        if content_type:
+            mimetype, params = parse_options_header(content_type)
+            if mimetype == JSONAPI_CONTENT_TYPE and set(params) - SUPPORTED_MEDIA_TYPE_PARAMETERS:
+                msg = f"The JSON:API media type only supports the profile parameter: {content_type}"
+                raise UnsupportedMediaType(msg)
+
+        accepted = _accepted_jsonapi_parameters()
+        if accepted and all(set(params) - SUPPORTED_MEDIA_TYPE_PARAMETERS for params in accepted):
+            msg = "The JSON:API media type is only accepted with unsupported parameters or extensions"
+            raise NotAcceptable(msg)
+
     def _change_content_type(self, resp: Response) -> Response:
-        # Exact match, as a wildcard accept like */* must not change the content type
-        if "application/vnd.api+json" not in request.accept_mimetypes.values():
+        # Exact media type, as a wildcard accept like */* must not change the content type
+        if not any(set(params) <= SUPPORTED_MEDIA_TYPE_PARAMETERS for params in _accepted_jsonapi_parameters()):
             return resp
 
-        resp.content_type = "application/vnd.api+json"
+        resp.content_type = JSONAPI_CONTENT_TYPE
         return resp
+
+
+def _accepted_jsonapi_parameters() -> list[dict[str, str]]:
+    """Returns the media type parameters of each JSON:API media type instance of the accept header."""
+    accepted = []
+    for value in request.accept_mimetypes.values():
+        mimetype, params = parse_options_header(value)
+        if mimetype == JSONAPI_CONTENT_TYPE:
+            accepted.append(params)
+    return accepted
 
 
 @t.overload
@@ -277,7 +354,7 @@ def extract_relationship(
     if isinstance(relationship, str):
         identifiers = get_relation_identifiers(_data, _data.data, relationship)
     elif isinstance(relationship, Relationship):
-        identifiers = relationship.data
+        identifiers = _relationship_data(relationship, "relationship")
     else:
         raise TypeError(f"Wrong relationship structure : {type(relationship)}.")
 
@@ -402,7 +479,7 @@ def get_relation_identifiers(
     if "." not in relationship:
         if not data.relationships or relationship not in data.relationships:
             raise AttributeError(f"Cannot extract relationship {relationship} from {toplevel}")
-        return data.relationships[relationship].data
+        return _relationship_data(data.relationships[relationship], relationship)
 
     # Composed relationships
     *first, last = relationship.split(".")
@@ -410,6 +487,13 @@ def get_relation_identifiers(
     if res is None:
         return None
     return get_relation_identifiers(toplevel, res, last)
+
+
+def _relationship_data(rel: Relationship, name: str) -> ResourceIdentifier | list[ResourceIdentifier] | None:
+    """Returns the resource linkage of the relationship, raising AttributeError if it is not given (only links)."""
+    if not rel.has_data:
+        raise AttributeError(f"No resource linkage in relationship {name}, its data is not given: {rel.links}")
+    return rel.data
 
 
 def _to_toplevel(toplevel) -> TopLevel:
@@ -444,6 +528,7 @@ def _flatten_resource(
     toplevel: TopLevel | SingleBodyModel | MultiBodyModel, current_res, current_flatten, first: str, lasts: str
 ):
     current_rel = current_res.relationships[first]
+    _relationship_data(current_rel, first)
     if isinstance(current_rel.data, list):
         current_flatten[first] = []
         for r in current_rel.data:
@@ -490,6 +575,9 @@ def _add_flatten_relationship(
         return
 
     rel = res.relationships[relationship]
+    if not rel.has_data and optional:
+        return
+    _relationship_data(rel, relationship)
     if isinstance(rel.data, list):
         flatten[relationship] = [flatten_resource(extract_from_resource_identifier(toplevel, r)) for r in rel.data]
     elif rel.data is None:

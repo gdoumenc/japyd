@@ -341,7 +341,7 @@ class TestReturnedValue:
 
         res = client.get("/example", query_string={"filter": "not(equals(name,'Brian O''Connor'))"})
         assert res.status_code == 200
-        assert "data" not in res.json
+        assert res.json["data"] is None
         assert "meta" in res.json
         assert "count" in res.json["meta"]
         assert res.json["meta"]["count"] == 0

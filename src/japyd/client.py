@@ -2,9 +2,7 @@ import typing as t
 
 import requests
 
-from .jsonapi import MultiResourcesTopLevel, SingleResourceTopLevel
-
-JSONAPI_CONTENT_TYPE = "application/vnd.api+json"
+from .jsonapi import JSONAPI_CONTENT_TYPE, MultiResourcesTopLevel, SingleResourceTopLevel
 
 
 class JapydClient:

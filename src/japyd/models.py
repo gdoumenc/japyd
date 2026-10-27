@@ -107,13 +107,17 @@ class JsonApiBaseModel(BaseModel):
 
             value = getattr(self, key)
             prefixed_key = f"{key_prefix}.{key}" if key_prefix else key
-            if issubtype(f.annotation, JsonApiBaseModel) and value is not None:  # type: ignore[arg-type]
+            if issubtype(f.annotation, JsonApiBaseModel):  # type: ignore[arg-type]
 
                 # Bypass if annotated as a dict
                 if "as_attribute" in f.metadata:
                     continue
 
-                if isinstance(value, list):
+                data: ResourceIdentifier | list[ResourceIdentifier] | None
+                if value is None:
+                    # Still a relationship when empty: [] for a to-many, null for a to-one
+                    data = [] if _is_to_many(f.annotation) else None
+                elif isinstance(value, list):
                     data = [_add_in_included(v, prefixed_key) for v in value]
                 else:
                     data = _add_in_included(value, prefixed_key)
@@ -129,6 +133,21 @@ class JsonApiBaseModel(BaseModel):
             relationships=relationships or None,
             links=self.links,
         )
+
+    @classmethod
+    def has_relationship_path(cls, path: str) -> bool:
+        """Checks the dotted path is a chain of relationships of the model, as an include path: lines.product."""
+        classes: list[type[JsonApiBaseModel]] = [cls]
+        for name in path.split("."):
+            next_classes: list[type[JsonApiBaseModel]] = []
+            for c in classes:
+                f = c.model_fields.get(name)
+                if f is not None and "as_attribute" not in f.metadata:
+                    next_classes.extend(_relationship_types(f.annotation))
+            if not next_classes:
+                return False
+            classes = next_classes
+        return True
 
     def resolve_attr(self, attr: str) -> t.Any:
         """Returns the attribute value, following the to-one relationships if the attribute is a dotted path.
@@ -217,6 +236,28 @@ def _is_public_attribute(value: t.Any, name: str) -> bool:
     if name in cls.model_fields or name in cls.model_computed_fields:
         return True
     return isinstance(inspect.getattr_static(cls, name, None), property)
+
+
+def _annotation_args(annotation: t.Any) -> list[t.Any]:
+    """Returns the types of an annotation, unwrapping the unions."""
+    if t.get_origin(annotation) in (t.Union, types.UnionType):
+        return [a for arg in t.get_args(annotation) for a in _annotation_args(arg)]
+    return [annotation]
+
+
+def _is_to_many(annotation: t.Any) -> bool:
+    return any(t.get_origin(a) in (list, tuple, set) for a in _annotation_args(annotation))
+
+
+def _relationship_types(annotation: t.Any) -> list[type[JsonApiBaseModel]]:
+    """Returns the resource models of a relationship annotation: list[Line] or Tenant | ResourceIdentifier | None."""
+    result = []
+    for arg in _annotation_args(annotation):
+        if t.get_origin(arg) in (list, tuple, set):
+            result.extend(_relationship_types(t.get_args(arg)[0]))
+        elif isinstance(arg, type) and issubclass(arg, JsonApiBaseModel):
+            result.append(arg)
+    return result
 
 
 T = t.TypeVar("T", bound="BaseModel")

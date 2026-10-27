@@ -11,6 +11,7 @@ from japyd import (
     ResourceIdentifier,
     SingleBodyModel,
     SingleResourceTopLevel,
+    TopLevel,
     extract_relationship,
 )
 
@@ -89,6 +90,23 @@ class TestQuery:
         assert r.data is None
         assert r.meta is not None
         assert r.meta["count"] == 0
+        # The null primary data is kept, even with exclude_none
+        assert r.model_dump(exclude_none=True) == {"data": None, "meta": {"count": 0}}
+        assert SingleResourceTopLevel(errors=[{"status": "404"}]).model_dump(exclude_none=True) == {
+            "errors": [{"status": "404"}],
+        }
+
+    @pytest.mark.parametrize("toplevel_class", [TopLevel, SingleResourceTopLevel, MultiResourcesTopLevel])
+    def test_data_and_errors(self, toplevel_class):
+        # The members data and errors must not coexist, an error document has no data, included or count
+        top = toplevel_class.model_validate({"errors": [{"status": "404"}]})
+        assert top.model_dump() == {"errors": [top.errors[0].model_dump()], "meta": None, "jsonapi": None, "links": None}
+        assert top.model_dump(exclude_none=True) == {"errors": [{"status": "404"}]}
+
+        resource = {"type": "a", "id": "1"}
+        data = resource if toplevel_class is SingleResourceTopLevel else [resource]
+        with pytest.raises(ValidationError, match="MUST NOT coexist"):
+            toplevel_class.model_validate({"data": data, "errors": [{"status": "404"}]})
 
     def test_pagination(self):
         query = JsonApiQueryModel()

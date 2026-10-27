@@ -17,6 +17,7 @@ from werkzeug.exceptions import (
 from .filter import FilterError, Oper
 from .jsonapi import (
     Error,
+    Link,
     MultiResourcesTopLevel,
     Resource,
     SingleResourceTopLevel,
@@ -26,6 +27,9 @@ from .jsonapi import (
 from .models import JsonApiBaseModel
 
 FIELDS_REGEXP = re.compile(r"fields\[(.*)]")
+
+# Implementation specific query parameter, with an uppercase letter as required by the JSON:API specification
+FLATTEN_PARAMETER = "flattenPaths"
 
 NUMERIC_REGEXP = r"[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?"
 # Any character except the filter syntax delimiters, to allow keys like 'gmp+' in a JSON attribute
@@ -128,6 +132,7 @@ class JsonApiQueryModel(BaseModel):
     include: set[str] = Field(default_factory=set)
     sort: str | None = None
     pagination: JsonApiPagination = Field(default_factory=lambda: JsonApiPagination())
+    # Given by the flattenPaths query parameter, the former flatten name being reserved by the JSON:API specification
     flatten: str | None = None
 
     def get_fields(self, jsonapi_type) -> set[str] | None:
@@ -196,6 +201,7 @@ class JsonApiQueryModel(BaseModel):
         if value is None:
             raise NotFound()
 
+        self._check_include([value])
         included: list[Resource] = []
         meta = {
             "count": 1,
@@ -215,6 +221,22 @@ class JsonApiQueryModel(BaseModel):
             return SingleResourceTopLevel(data=flat_res, included=included or None, meta=meta)
 
         return res
+
+    def created(
+        self, value: JsonApiBaseModel | Resource | dict, *, location: str | None = None
+    ) -> tuple[SingleResourceTopLevel, int, dict[str, str]]:
+        """Returns the created resource with the 201 Created status, as a view result.
+
+        :param value: The created resource.
+        :param location: The URL of the created resource for the Location header, its 'self' link if not given.
+        """
+        res = self.one(value)
+        if location is None and res.data and res.data.links:
+            self_link = res.data.links.get("self")
+            if self_link is not None:
+                location = self_link.href if isinstance(self_link, Link) else str(self_link)
+        headers = {"Location": location} if location else {}
+        return res, HTTPStatus.CREATED, headers
 
     def one_or_none(self, value: JsonApiBaseModel | dict | None) -> SingleResourceTopLevel:
         """Returns a single JSON:API toplevel's data."""
@@ -236,6 +258,7 @@ class JsonApiQueryModel(BaseModel):
         :param full_list: If true, the list is fully completed.
         :param total: The pagination total number of records if not a full list.
         """
+        self._check_include(values)
         included: list[Resource] = []
         start = (self.pagination.number - 1) * self.pagination.size
         end = start + self.pagination.size
@@ -317,6 +340,14 @@ class JsonApiQueryModel(BaseModel):
         if fields:
             data["fields"] = fields
 
+        if FLATTEN_PARAMETER in data:
+            if "flatten" in data:
+                raise BadRequest(f"Wrong flatten parameters: use only {FLATTEN_PARAMETER}, flatten is deprecated")
+            data["flatten"] = data.pop(FLATTEN_PARAMETER)
+        elif "flatten" in data and has_request_context() and "flatten" in request.args:
+            msg = f"The flatten query parameter is deprecated, use {FLATTEN_PARAMETER} instead"
+            warnings.warn(msg, DeprecationWarning, stacklevel=2)
+
         # Pagination defined as page[number] and page[size] query arguments, or in the request if built manually
         if "pagination" not in data:
             args = data if "page[number]" in data or "page[size]" in data else {}
@@ -365,6 +396,19 @@ class JsonApiQueryModel(BaseModel):
                 if rel:
                     paths.add(f"{path}.{rel}" if path else rel)
         return paths
+
+    def _check_include(self, values: t.Iterable[t.Any]) -> None:
+        """Raises BadRequest if an include path is not a relationship path of the models, as the specification requires.
+
+        The paths added by flatten are not checked, as flatten has its own optional relationships.
+        """
+        include = self.include - self.flatten_paths
+        if not include:
+            return
+        for cls in {type(v) for v in values if isinstance(v, JsonApiBaseModel)}:
+            for path in include:
+                if not cls.has_relationship_path(path):
+                    raise BadRequest(f"Wrong include parameter: {path} is not a relationship of {cls.jsonapi_type}")
 
     def _flat_resource(self, res: Resource, flat: dict) -> Resource:
         """Returns the flattened resource, keeping the relationships not merged in the attributes."""

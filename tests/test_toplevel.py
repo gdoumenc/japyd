@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from japyd import (
     Relationship,
     Resource,
@@ -151,6 +153,43 @@ class TestConsistency:
         assert extract_relationship(toplevel, "author") is None
         assert extract_relationship(doc, "author") is None
         assert flatten_resource(toplevel, pattern="author")["author"] is None
+
+    def test_relationship_data_states(self):
+        # data null (empty to-one), [] (empty to-many) and absent (only links) are kept distinct
+        relationships = {
+            "author": {"data": None},
+            "comments": {"data": []},
+            "editor": {"links": {"related": "http://example.com/articles/1/editor"}},
+        }
+        doc = {"data": {"type": "article", "id": "1", "relationships": relationships}}
+        toplevel = SingleResourceTopLevel.model_validate(doc)
+        assert toplevel.data is not None and toplevel.data.relationships is not None
+        editor = toplevel.data.relationships["editor"]
+        assert not editor.has_data
+        assert toplevel.data.relationships["author"].has_data
+        assert toplevel.data.relationships["comments"].has_data
+
+        dumped = toplevel.model_dump(mode="json", exclude_none=True)["data"]["relationships"]
+        assert dumped == relationships
+        assert "data" not in toplevel.model_dump(mode="json")["data"]["relationships"]["editor"]
+
+        assert extract_relationship(toplevel, "author") is None
+        assert extract_relationship(toplevel, "comments") == []
+        with pytest.raises(AttributeError, match="No resource linkage in relationship editor"):
+            extract_relationship(toplevel, "editor")
+        with pytest.raises(AttributeError, match="No resource linkage"):
+            extract_relationship(toplevel, editor)
+
+        with pytest.raises(AttributeError, match="No resource linkage"):
+            flatten_resource(toplevel, pattern="editor")
+        assert "editor" not in flatten_resource(toplevel, pattern="editor?")
+        with pytest.raises(AttributeError, match="No resource linkage"):
+            flatten_resource(toplevel, pattern="editor.country")
+
+    def test_relationship_constructed(self):
+        assert Relationship(data=None).model_dump(exclude_none=True) == {"data": None}
+        assert Relationship(data=[]).model_dump(exclude_none=True) == {"data": []}
+        assert Relationship(meta={"count": 3}).model_dump(exclude_none=True) == {"meta": {"count": 3}}
 
     def test_extract_list_from_dict(self, articles):
         authors = extract_relationship(articles, "author")

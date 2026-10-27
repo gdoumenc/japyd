@@ -81,7 +81,7 @@ def list_books(query: JsonApiQueryModel):
 @app.get("/books/<book_id>")
 @validate(exclude_none=True)
 def get_book(book_id: str, query: JsonApiQueryModel):
-    return query.one_or_none(next((b for b in BOOKS if b.id == book_id), None))
+    return query.one(next((b for b in BOOKS if b.id == book_id), None))  # 404 if not found
 ```
 
 Run it:
@@ -118,9 +118,11 @@ All of these work against the app above:
 | `/books?sort=-price` | most expensive first |
 | `/books?fields[book]=title,price` | only these attributes |
 | `/books?page[size]=2` | first page of 2, with `has_next` and the total `count` in `meta` |
-| `/books?flatten=author` | the author merged into the book attributes (japyd extension) |
+| `/books?flattenPaths=author` | the author merged into the book attributes (japyd extension) |
 | `/books?filter=equals(titl,'Dune')` | `400` JSON:API error: `Unknown attribute titl` |
 | `/books?filter=equals(title,Dune` | `422` JSON:API error: wrong filter syntax |
+| `/books?include=price` | `400` JSON:API error: `price` is not a relationship |
+| `/books/42` | `404` JSON:API error |
 
 ## Guide
 
@@ -146,7 +148,9 @@ class Order(JsonApiBaseModel):
     items: Annotated[list[Item], "as_attribute"]         # kept as an attribute
 ```
 
-- A related resource is put in `included` only when requested: `?include=customer,lines.product`.
+- A related resource is put in `included` only when requested: `?include=customer,lines.product`. An include path
+  that is not a relationship of the model gives a `400`, as the specification requires.
+- A relationship set to `None` stays a relationship: `data: null` for a to-one, `data: []` for a to-many.
 - Override the `links` property to add resource links, or `jsonapi_id` to compute the id.
 
 ### Responses
@@ -156,12 +160,13 @@ class Order(JsonApiBaseModel):
 
 | Method | Returns |
 | --- | --- |
-| `query.one(model)` | a single resource, `404` if `None` |
-| `query.one_or_none(model)` | a single resource or `data: null` |
+| `query.one(model)` | a single resource, `404` if `None`: `GET /books/1` |
+| `query.one_or_none(model)` | a single resource or `data: null`, for a to-one relationship: `GET /books/1/author` |
+| `query.created(model, location=...)` | the created resource, `201` with the `Location` header: `POST /books` |
 | `query.paginate(models)` | a page of resources with pagination metadata |
 | `query.select(models)` | the models matching the filters, sorted |
 | `query.match(model)` / `query.sort_values(models)` | filtering or sorting only |
-| `query.no_content()` | an empty `204` response |
+| `query.no_content()` | an empty `204` response, for a `PATCH` or `DELETE` |
 
 When the database already paginates, give the page and the total count:
 
@@ -174,15 +179,19 @@ return query.paginate(rows, full_list=False, total=db.count())
 
 | Parameter | Example | |
 | --- | --- | --- |
-| `include` | `include=author,comments.user` | related resources to add in `included` |
+| `include` | `include=author,comments.user` | related resources to add in `included`, `400` if not a relationship |
 | `fields` | `fields[book]=title,price` | sparse fieldsets, per type |
 | `filter` | `filter=equals(status,'open')` | see [Filtering](#filtering), several `filter` are combined with `and` |
 | `sort` | `sort=-published,title` | `-` for descending, null values first |
 | `page` | `page[number]=2&page[size]=10` | default size 20, values must be at least 1 |
-| `flatten` | `flatten=author,lines.product\|page?` | japyd extension: merges relationships in the attributes |
+| `flattenPaths` | `flattenPaths=author,lines.product\|page?` | japyd extension: merges relationships in the attributes |
 
-With `flatten`, the flattened relationships are included automatically and removed from `included`, as they are
+With `flattenPaths`, the flattened relationships are included automatically and removed from `included`, as they are
 already in the attributes. `|` flattens several relationships at the same level, `?` makes one optional.
+In Python, the value is `query.flatten`.
+
+`flattenPaths` was named `flatten` before 1.4.0. As the JSON:API specification reserves the all-lowercase names,
+`flatten` is deprecated: it still works with a `DeprecationWarning`, and giving both parameters returns `400`.
 
 ### Filtering
 
@@ -219,6 +228,8 @@ Not supported yet: `count()`, `isType()` and filter scoping on relationships (`f
 ### Request bodies
 
 ```python
+from flask import url_for
+
 from japyd import SingleBodyModel
 
 
@@ -227,8 +238,12 @@ from japyd import SingleBodyModel
 def create_author(body: SingleBodyModel, query: JsonApiQueryModel):
     author = Author.from_resource(body.data)  # validates the attributes, 409 Conflict on a wrong type
     author.id = save(author)
-    return query.one(author), 201
+    return query.created(author, location=url_for("get_author", author_id=author.id))  # 201 Created
 ```
+
+`query.created` returns the resource with `201 Created` and the `Location` header, taken from the resource `self`
+link when `location` is not given. When the client gives the id and the server changes nothing, return
+`query.no_content()` (`204`) instead.
 
 `SingleBodyModel` and `MultiBodyModel` parse JSON:API request documents. A resource without `id` (creation) has
 `id == ""` and may use `lid`. `body.attributes` gives the attributes directly.
@@ -246,7 +261,11 @@ def create_author(body: SingleBodyModel, query: JsonApiQueryModel):
 - Unhandled exceptions are logged and returned as a generic `500`. Their type and message are exposed only in debug mode
   or with `app.config["JSONAPI_EXPOSE_ERRORS"] = True`.
 - An application handler registered on `Exception` before `JsonApiApp` is still called, and its response is wrapped.
-- The response content type is `application/vnd.api+json` when the client accepts it.
+- The response content type is `application/vnd.api+json` when the client accepts it, `application/json` otherwise
+  (`*/*`, `application/json` or no `Accept`).
+- As the specification requires, a request with `Content-Type: application/vnd.api+json` and a parameter other than
+  `profile` (`ext`, `charset`...) returns `415`, and an `Accept` whose JSON:API media types all have such a parameter
+  returns `406`. japyd supports no extension, and profiles are accepted but ignored.
 
 Return your own error with `TopLevel.error(code=409, title="Conflict", detail="Already exists")`.
 
@@ -270,6 +289,21 @@ books = JapydClient("http://localhost:5000")("get", "/books", params={"sort": "-
 ```
 
 Relationship paths can be nested (`lines.product`), and an empty to-one relationship (`"data": null`) gives `None`.
+A relationship given only by its `links` has no resource linkage: `relationship.has_data` is `False`, and extracting or
+flattening it raises `AttributeError` (an optional `?` flatten skips it), as it may be neither empty nor a to-many.
+
+## For AI agents
+
+japyd ships an [Agent Skill](src/japyd/skills/japyd/SKILL.md) with the rules to write japyd views (which response
+for which endpoint, models, query parameters, errors). Install it in a project using japyd for Claude Code or any
+agent supporting skills:
+
+```bash
+mkdir -p .claude/skills
+cp -r "$(python -c 'import japyd, pathlib; print(pathlib.Path(japyd.__file__).parent / "skills/japyd")')" .claude/skills/
+```
+
+[`llms.txt`](llms.txt) gives a summary of the library for LLMs.
 
 ## Contributing
 

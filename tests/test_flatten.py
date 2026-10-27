@@ -1,8 +1,20 @@
 import json
+import typing as t
 from pathlib import Path
 
 import pytest
-from japyd import Resource, TopLevel, flatten_resource, extract_relationship
+from flask import Flask
+from flask_pydantic import validate
+
+from japyd import (
+    JsonApiApp,
+    JsonApiBaseModel,
+    JsonApiQueryModel,
+    Resource,
+    TopLevel,
+    extract_relationship,
+    flatten_resource,
+)
 
 BODY = json.loads((Path(__file__).parent / "_flatten_data.json").read_text())
 
@@ -125,3 +137,61 @@ class TestFlatten:
         assert data is not None
         assert isinstance(data, dict)
         assert "nonexistent" not in data
+
+
+class Author(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "author"
+
+    id: str
+    name: str
+
+
+class Book(JsonApiBaseModel):
+    jsonapi_type: t.ClassVar[str] = "book"
+
+    id: str
+    title: str
+    author: Author
+
+
+app = Flask(__name__)
+JsonApiApp(app)
+
+
+@app.get("/books/<book_id>")
+@validate(exclude_none=True)
+def get_book(book_id: str, query: JsonApiQueryModel):
+    return query.one(Book(id=book_id, title="Dune", author=Author(id="2", name="Frank Herbert")))
+
+
+@pytest.fixture()
+def client():
+    return app.test_client()
+
+
+class TestFlattenParameter:
+
+    def test_flatten_paths(self, client, recwarn):
+        response = client.get("/books/3?flattenPaths=author")
+        assert response.status_code == 200
+        data = response.json["data"]
+        assert data["attributes"]["author"] == {"type": "author", "id": "2", "name": "Frank Herbert"}
+        assert "relationships" not in data
+        assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]
+
+    def test_deprecated_flatten(self, client):
+        with pytest.warns(DeprecationWarning, match="use flattenPaths instead"):
+            response = client.get("/books/3?flatten=author")
+        assert response.status_code == 200
+        assert response.json["data"]["attributes"]["author"]["name"] == "Frank Herbert"
+
+    def test_both_flatten_parameters(self, client):
+        response = client.get("/books/3?flatten=author&flattenPaths=author")
+        assert response.status_code == 400
+        assert "use only flattenPaths" in response.json["errors"][0]["detail"]
+
+    def test_python_constructor(self, recwarn):
+        # The flatten attribute name is kept in Python, without deprecation
+        assert JsonApiQueryModel(flatten="author").flatten == "author"
+        assert JsonApiQueryModel.model_validate({"flattenPaths": "author"}).flatten == "author"
+        assert not [w for w in recwarn if issubclass(w.category, DeprecationWarning)]

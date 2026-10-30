@@ -1,6 +1,6 @@
 [project]
 name = "japyd"
-version = "1.4.0"
+version = "1.4.1"
 description = "JSON:API server toolkit for Flask and Pydantic: automatic relationships, JsonApiDotNetCore filter syntax, pagination and errors."
 authors = [
     { name = "gdoumenc", email = "gdoumenc@neorezo.io" },
@@ -43,6 +43,9 @@ dependencies = [
     "pydantic>=2",
     "requests",
 ]
+
+[project.scripts]
+japyd-skill = "japyd.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/gdoumenc/japyd"

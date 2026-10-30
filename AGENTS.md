@@ -11,6 +11,7 @@ syntax for query parameters. Published on PyPI as `japyd`.
 - `src/japyd/models.py`: `JsonApiBaseModel`, conversion to resources, `resolve_attr` and `match` for filtering
 - `src/japyd/dotnet.py`: `JsonApiQueryModel`, query parameter and filter parsing, pagination and responses
 - `src/japyd/filter.py`: `Oper` enum and `FilterError`, with no web dependency
+- `src/japyd/cli.py`: `japyd-skill` command installing the Agent Skill
 - `src/japyd/skills/japyd/SKILL.md`: Agent Skill for japyd users, shipped in the wheel
 - `tests/`: pytest tests, one file per feature
 
@@ -31,4 +32,7 @@ pdm run pytest          # tests only
 - Follow JsonApiDotNetCore semantics for filters; document any japyd extension in the README.
 - Add tests for every behavior change; update the README, `llms.txt` and the Agent Skill
   `src/japyd/skills/japyd/SKILL.md` when the public API changes.
+- Before each commit, review the staged diff against `src/japyd/skills/japyd/SKILL.md` and update the skill in the
+  same commit if a change affects how users write japyd code (API, defaults, status codes, query syntax, errors).
+  Keep it short: rules and examples for users, not a changelog.
 - The version is in `pyproject.toml`; a push on `main` with a new version publishes to PyPI.

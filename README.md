@@ -299,9 +299,13 @@ for which endpoint, models, query parameters, errors). Install it in a project u
 agent supporting skills:
 
 ```bash
-mkdir -p .claude/skills
-cp -r "$(python -c 'import japyd, pathlib; print(pathlib.Path(japyd.__file__).parent / "skills/japyd")')" .claude/skills/
+japyd-skill install          # in ./.claude/skills/japyd, for this project
+japyd-skill install --user   # in ~/.claude/skills/japyd, for all your projects
+japyd-skill install --dir .agents/skills   # in another skills directory
+japyd-skill show             # print the skill
 ```
+
+Run it again after upgrading japyd to update the skill; a skill you modified is only replaced with `--force`.
 
 [`llms.txt`](llms.txt) gives a summary of the library for LLMs.
 

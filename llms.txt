@@ -16,7 +16,7 @@ Key points:
 ## Docs
 
 - [README](https://raw.githubusercontent.com/gdoumenc/japyd/main/README.md): features, serialization, deserialization and filtering syntax with examples
-- [Agent Skill](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/skills/japyd/SKILL.md): rules to write japyd views, shipped in the package as `japyd/skills/japyd/SKILL.md`
+- [Agent Skill](https://raw.githubusercontent.com/gdoumenc/japyd/main/src/japyd/skills/japyd/SKILL.md): rules to write japyd views, shipped in the package as `japyd/skills/japyd/SKILL.md`, installed with `japyd-skill install` (`--user` for `~/.claude/skills`)
 - [JsonApiDotNetCore filtering](https://www.jsonapi.net/usage/reading/filtering.html): reference of the filter syntax japyd follows
 - [JSON:API specification](https://jsonapi.org/format/): the document structure japyd produces
 
